@@ -1,0 +1,264 @@
+kind: AdaptiveDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: SectionName
+    description: "Section key, exactly one of: Purpose, PrincipalDuties, Education, WorkExperience, Certifications, KSA."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: ProposedText
+    description: The complete final text for this section exactly as the user confirmed it. Full section, not just the changed lines.
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+modelDescription: Saves the user's confirmed new text for one section of the job description being updated, and reviews it for flags. Use ONLY after the user has confirmed the final wording for that section. Call once per confirmed section; call again if the user later revises the same section.
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent: {}
+  actions:
+    - kind: ConditionGroup
+      id: conditionGroup_qP2Qm5
+      conditions:
+        - id: conditionItem_68AuUG
+          condition: =!(Topic.SectionName in ["Purpose","PrincipalDuties","Education","WorkExperience","Certifications","KSA"])
+          actions:
+            - kind: SetVariable
+              id: setVariable_bef07d
+              variable: Topic.SaveStatus
+              value: ="Invalid section"
+
+            - kind: EndDialog
+              id: RgiQcm
+
+      elseActions:
+        - kind: SetVariable
+          id: setVariable_pqnLko
+          variable: Topic.ProposedText
+          value: "=If(Topic.SectionName = \"PrincipalDuties\", Concat(Filter(ForAll(Split(Substitute(Substitute(Substitute(Topic.ProposedText, \"<br />\", Char(10)), \"<br/>\", Char(10)), \"<br>\", Char(10)), Char(10)), With({t: Trim(Substitute(ThisRecord.Value, \"**\", \"\"))}, With({u: If(Left(t, 1) in [\"•\", \"-\", \"*\", \"·\"], Trim(Mid(t, 2)), t)}, With({p: Find(\". \", u)}, If(Find(Left(u, 1), \"0123456789\") > 0 && p > 1 && p <= 3, Trim(Mid(u, p + 2)), u))))), !IsBlank(Value)), \"- \" & Value, Char(10)), Topic.ProposedText)"
+
+        - kind: SetVariable
+          id: setVariable_UW0wqU
+          variable: Topic.OriginalSectionText
+          value: |-
+            =Switch(Topic.SectionName,
+              "Purpose", Global.OriginalJD.Purpose,
+              "PrincipalDuties", Global.OriginalJD.PrincipalDuties,
+              "Education", Global.OriginalJD.Education,
+              "WorkExperience", Global.OriginalJD.WorkExperience,
+              "Certifications", Global.OriginalJD.Certifications,
+              "KSA", Global.OriginalJD.KSA,
+              "")
+
+        - kind: SetVariable
+          id: setVariable_8Nc24b
+          variable: Topic.OtherChanges
+          value: |-
+            =With(
+              {
+                t: Table(
+                  {S: "Purpose", T: Global.Changes.Purpose},
+                  {S: "PrincipalDuties", T: Global.Changes.PrincipalDuties},
+                  {S: "Education", T: Global.Changes.Education},
+                  {S: "WorkExperience", T: Global.Changes.WorkExperience},
+                  {S: "Certifications", T: Global.Changes.Certifications},
+                  {S: "KSA", T: Global.Changes.KSA}
+                )
+              },
+              If(
+                CountRows(Filter(t, !IsBlank(T) && S <> Topic.SectionName)) = 0,
+                "None",
+                Concat(Filter(t, !IsBlank(T) && S <> Topic.SectionName), S & ": " & T, Char(10) & Char(10))
+              )
+            )
+
+        - kind: SetVariable
+          id: setVariable_scFullJD
+          variable: Topic.FullJDNoCode
+          value: =Substitute(Global.OriginalJDText, "Job Code: " & Global.OriginalJD.JobCode & Char(10), "")
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_mG3DI7
+      input:
+        binding:
+          FullJD: =Topic.FullJDNoCode
+          JobTitle: =Global.OriginalJD.Title
+          OriginalText: =Topic.OriginalSectionText
+          OtherChanges: =Topic.OtherChanges
+          ProposedText: =Topic.ProposedText
+          SectionName: =Topic.SectionName
+          UpdateReasons: "=Global.UpdateReasons & If(IsBlank(Global.OtherReason), \"\", \" (Other: \" & Global.OtherReason & \")\")"
+
+      output:
+        binding:
+          predictionOutput: Topic.Review
+
+      aIModelId: 4beaa9b5-83f6-43a8-ad42-f29824bdcdc4
+
+    - kind: SetVariable
+      id: setVariable_y0YcAc
+      variable: Topic.R
+      value: =ParseJSON(Topic.Review.text)
+
+    - kind: ConditionGroup
+      id: conditionGroup_2uQw6w
+      conditions:
+        - id: conditionItem_ztA03f
+          condition: =Coalesce(Boolean(Topic.R.hard_stop), false) = true
+          actions:
+            - kind: SetVariable
+              id: setVariable_scStopReason
+              variable: Topic.StopReason
+              value: =If(IsBlank(Trim(Text(Topic.R.hard_stop_reason))), "This change can't be made through the job description update process. HR has noted the request.", Trim(Text(Topic.R.hard_stop_reason)))
+
+            - kind: SetVariable
+              id: setVariable_igpjga
+              variable: Global.HardStopLog
+              value: =Global.HardStopLog & Char(10) & "- [" & Topic.SectionName & "] " & Topic.StopReason
+
+            - kind: SetVariable
+              id: setVariable_qGnE96
+              variable: Topic.SaveStatus
+              value: ="Blocked"
+
+            - kind: SetVariable
+              id: setVariable_oekonE
+              variable: Topic.HardStopMessage
+              value: =Topic.StopReason
+
+            - kind: EndDialog
+              id: fMpNv4
+
+      elseActions:
+        - kind: SetVariable
+          id: setVariable_W9lGZj
+          variable: Global.Changes
+          value: |-
+            ={
+              Purpose: If(Topic.SectionName = "Purpose", Topic.ProposedText, Global.Changes.Purpose),
+              PrincipalDuties: If(Topic.SectionName = "PrincipalDuties", Topic.ProposedText, Global.Changes.PrincipalDuties),
+              Education: If(Topic.SectionName = "Education", Topic.ProposedText, Global.Changes.Education),
+              WorkExperience: If(Topic.SectionName = "WorkExperience", Topic.ProposedText, Global.Changes.WorkExperience),
+              Certifications: If(Topic.SectionName = "Certifications", Topic.ProposedText, Global.Changes.Certifications),
+              KSA: If(Topic.SectionName = "KSA", Topic.ProposedText, Global.Changes.KSA)
+            }
+
+        - kind: SetVariable
+          id: setVariable_IvzL9X
+          variable: Global.AddedSections
+          value: |-
+            =If(
+              Topic.SectionName in Global.SelectedSections || Topic.SectionName in Global.AddedSections,
+              Global.AddedSections,
+              If(IsBlank(Global.AddedSections), Topic.SectionName, Global.AddedSections & "," & Topic.SectionName)
+            )
+
+        - kind: SetVariable
+          id: setVariable_scThisChecks
+          variable: Topic.ThisChecks
+          value: |-
+            ={
+              PM: Trim(Text(Topic.R.pm_check)),
+              Sales: Trim(Text(Topic.R.sales_check)),
+              RM: Trim(Text(Topic.R.rm_check)),
+              NMLS: Trim(Text(Topic.R.nmls_check))
+            }
+
+        - kind: SetVariable
+          id: setVariable_scSectionChecks
+          variable: Global.SectionChecks
+          value: |-
+            ={
+              Purpose: If(Topic.SectionName = "Purpose", Topic.ThisChecks, Global.SectionChecks.Purpose),
+              PrincipalDuties: If(Topic.SectionName = "PrincipalDuties", Topic.ThisChecks, Global.SectionChecks.PrincipalDuties),
+              Education: If(Topic.SectionName = "Education", Topic.ThisChecks, Global.SectionChecks.Education),
+              WorkExperience: If(Topic.SectionName = "WorkExperience", Topic.ThisChecks, Global.SectionChecks.WorkExperience),
+              Certifications: If(Topic.SectionName = "Certifications", Topic.ThisChecks, Global.SectionChecks.Certifications),
+              KSA: If(Topic.SectionName = "KSA", Topic.ThisChecks, Global.SectionChecks.KSA)
+            }
+
+        - kind: SetVariable
+          id: setVariable_rHn5RB
+          variable: Global.PendingChecks
+          value: |-
+            =With(
+              {
+                c: Table(
+                  {S: "Purpose", PM: Global.SectionChecks.Purpose.PM, Sales: Global.SectionChecks.Purpose.Sales, RM: Global.SectionChecks.Purpose.RM, NMLS: Global.SectionChecks.Purpose.NMLS},
+                  {S: "Principal Duties", PM: Global.SectionChecks.PrincipalDuties.PM, Sales: Global.SectionChecks.PrincipalDuties.Sales, RM: Global.SectionChecks.PrincipalDuties.RM, NMLS: Global.SectionChecks.PrincipalDuties.NMLS},
+                  {S: "Education", PM: Global.SectionChecks.Education.PM, Sales: Global.SectionChecks.Education.Sales, RM: Global.SectionChecks.Education.RM, NMLS: Global.SectionChecks.Education.NMLS},
+                  {S: "Work Experience", PM: Global.SectionChecks.WorkExperience.PM, Sales: Global.SectionChecks.WorkExperience.Sales, RM: Global.SectionChecks.WorkExperience.RM, NMLS: Global.SectionChecks.WorkExperience.NMLS},
+                  {S: "Certifications", PM: Global.SectionChecks.Certifications.PM, Sales: Global.SectionChecks.Certifications.Sales, RM: Global.SectionChecks.Certifications.RM, NMLS: Global.SectionChecks.Certifications.NMLS},
+                  {S: "KSAs", PM: Global.SectionChecks.KSA.PM, Sales: Global.SectionChecks.KSA.Sales, RM: Global.SectionChecks.KSA.RM, NMLS: Global.SectionChecks.KSA.NMLS}
+                )
+              },
+              {
+                PeopleManagement: Concat(Filter(c, !IsBlank(PM)), S & ": " & PM, "; "),
+                SalesNonSales: Concat(Filter(c, !IsBlank(Sales)), S & ": " & Sales, "; "),
+                RelationshipManager: Concat(Filter(c, !IsBlank(RM)), S & ": " & RM, "; "),
+                NMLS: Concat(Filter(c, !IsBlank(NMLS)), S & ": " & NMLS, "; ")
+              }
+            )
+
+        - kind: SetVariable
+          id: setVariable_rAQTmP
+          variable: Topic.SaveStatus
+          value: ="Saved"
+
+        - kind: SetVariable
+          id: setVariable_3VsheE
+          variable: Topic.Reminders
+          value: =Text(Topic.R.reminders)
+
+        - kind: SetVariable
+          id: setVariable_Ag2QP0
+          variable: Topic.PendingCheckSummary
+          value: |-
+            =Concat(
+              Filter(
+                Table(
+                  {F: "People Management", E: Global.PendingChecks.PeopleManagement},
+                  {F: "Sales/Non-Sales", E: Global.PendingChecks.SalesNonSales},
+                  {F: "Relationship Manager", E: Global.PendingChecks.RelationshipManager},
+                  {F: "NMLS Required", E: Global.PendingChecks.NMLS}
+                ),
+                !IsBlank(E)
+              ),
+              F & ": " & E,
+              Char(10)
+            )
+
+inputType:
+  properties:
+    ProposedText:
+      displayName: ProposedText
+      description: The complete final text for this section exactly as the user confirmed it. Full section, not just the changed lines.
+      type: String
+
+    SectionName:
+      displayName: SectionName
+      description: "Section key, exactly one of: Purpose, PrincipalDuties, Education, WorkExperience, Certifications, KSA."
+      type: String
+
+outputType:
+  properties:
+    HardStopMessage:
+      displayName: HardStopMessage
+      description: "Set only when SaveStatus is Blocked. The section was NOT saved, and the request is already logged for HR, so do not call Log Hard Stop. In one or two sentences, explain this message in plain words, say to contact Evelyn Martinez with questions, and offer to save the rest of the change without the restricted part."
+      type: String
+
+    PendingCheckSummary:
+      displayName: PendingCheckSummary
+      description: "Possible indirect impacts across all saved sections, one field per line with the section that raised it. A field can disappear when a section is revised. When a field appears here for the first time, point it out in one short sentence without asking about it. Ask the confirming questions only for fields still listed here when the user says they are done."
+      type: String
+
+    Reminders:
+      displayName: Reminders
+      description: "Cross-section and wording reminders from the HR review of this save. If not empty, mention the most important one in one short sentence and offer to update that section. Present wording points as optional polish HR may suggest, not as errors."
+      type: String
+
+    SaveStatus:
+      displayName: SaveStatus
+      description: "Saved: confirm in one short line, handle Reminders and PendingCheckSummary as described, then move to the next remaining section. Blocked: see HardStopMessage. Invalid section: only Purpose, Principal Duties, Education, Work Experience, Certifications, and KSAs can be edited; ask which of these they meant."
+      type: String
