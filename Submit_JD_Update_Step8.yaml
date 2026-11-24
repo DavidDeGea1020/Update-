@@ -1,0 +1,717 @@
+kind: AdaptiveDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: IndirectConfirmations
+    description: "The user's answers to the confirming questions about the fields listed in PendingChecksSummary, e.g. \"Relationship Manager: yes, manages ~40 clients.\" Use \"None\" if PendingChecksSummary was blank. Never ask the user for this directly."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: ProposedTitle
+    description: The job title the user proposes, only if a title review was requested. Otherwise "N/A".
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: TitleJustification
+    name: TitleJustification
+    description: The user's reason why the current title no longer fits, only if a title review was requested. Otherwise "N/A".
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: FinalJSON
+    description: Internal. The JD Final Review result, passed in by Review JD Update.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: ChangesText
+    description: Internal. Passed in by Review JD Update.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: SectionsChanged
+    description: Internal. Passed in by Review JD Update.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: ReviewContext
+    description: Internal. Passed in by Review JD Update.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: BusinessReason
+    description: Passed from Review JD Update.
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+modelDescription: Builds the final review summary of the job description update and lets the user submit it to HR. Use when the user says they are done updating, are ready to submit, or wants to see a summary of their changes. Before calling, ask the user the confirming questions for any potential indirect impacts, and if a title review was requested, ask for their proposed title and justification.
+beginDialog:
+  kind: OnRedirect
+  id: main
+  actions:
+    - kind: SetVariable
+      id: setVariable_Fp9K2x
+      variable: Topic.F
+      value: =ParseJSON(Topic.FinalJSON)
+
+    - kind: SetVariable
+      id: QYDzM3
+      variable: Topic.Ask
+      value: ="What would you like to do?"
+
+    - kind: SetVariable
+      id: oBv8ro
+      variable: Topic.Turns
+      value: =0
+
+    - kind: SetVariable
+      id: 8UuR3W
+      variable: Topic.QALog
+      value: ="None"
+
+    - kind: Question
+      id: question_7s2x42
+      interruptionPolicy:
+        allowInterruption: false
+
+      repeatCount: 0
+      alwaysPrompt: true
+      variable: Topic.Decision
+      prompt: "{Topic.Ask}"
+      defaultValue: =Blank()
+      entity:
+        kind: EmbeddedEntity
+        sensitivityLevel: None
+        definition:
+          kind: ClosedListEntity
+          items:
+            - id: Submit to HR
+              displayName: Submit to HR
+
+            - id: Make more changes
+              displayName: Make more changes
+
+            - id: Cancel this update
+              displayName: Cancel this update
+
+    - kind: SetVariable
+      id: setVariable_0xMcBy
+      variable: Topic.Decision
+      value: |-
+        =If(
+            Lower(Trim(System.Activity.Text)) in ["submit to hr", "make more changes", "cancel this update"],
+            Topic.Decision,
+            Blank()
+        )
+
+    - kind: ConditionGroup
+      id: conditionGroup_lLdO6N
+      conditions:
+        - id: conditionItem_1Omjhp
+          condition: =Topic.Decision = 'cr87b_JOBJARVIS.topic.SubmitJDUpdate.main.question_7s2x42'.'Submit to HR'
+          actions:
+            - kind: SetVariable
+              id: setVariable_IBQ0TM
+              variable: Topic.AttestationText
+              value: "By submitting, I confirm that: (1) These changes reflect the current, ongoing duties and requirements of this position. (2) They describe the job, not the performance or qualifications of a specific employee. (3) The information and business reason I provided are accurate and complete to the best of my knowledge. (4) I understand these updates are not final or official until they have been reviewed and approved by HR. (5) I understand I will receive updates throughout the HR review process, including any questions, requested changes, notes, or approval decisions. I understand HR will review this request, and nothing changes until HR approves it."
+
+            - kind: AdaptiveCardPrompt
+              id: NM7XC9
+              card: |-
+                {
+                  "type": "AdaptiveCard",
+                  "$schema": "https://adaptivecards.io/schemas/adaptive-card.json",
+                  "version": "1.5",
+                  "body": [
+                    {
+                      "type": "TextBlock",
+                      "text": "Before you submit",
+                      "weight": "Bolder",
+                      "size": "Medium",
+                      "wrap": true
+                    },
+                    {
+                      "type": "Input.ChoiceSet",
+                      "id": "hrbp",
+                      "label": "Which HR Business Partner should review this request?",
+                      "style": "expanded",
+                      "isRequired": true,
+                      "errorMessage": "Please choose an HR Business Partner.",
+                      "choices": [
+                        {
+                          "title": "HRBP_NAME_1",
+                          "value": "hrbp1@example.com"
+                        },
+                        {
+                          "title": "HRBP_NAME_2",
+                          "value": "hrbp2@example.com"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "By submitting, I confirm that:",
+                      "spacing": "Medium",
+                      "wrap": true
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "- These changes reflect the current, ongoing duties and requirements of this position.\n- They describe the job, not the performance or qualifications of a specific employee.\n- The information and business reason I provided are accurate and complete to the best of my knowledge.",
+                      "wrap": true,
+                      "spacing": "Small"
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "- I understand these updates are not final or official until they have been reviewed and approved by HR.",
+                      "weight": "Bolder",
+                      "wrap": true,
+                      "spacing": "None"
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "- I understand I will receive updates throughout the HR review process, including any questions, requested changes, notes, or approval decisions.",
+                      "wrap": true,
+                      "spacing": "None"
+                    },
+                    {
+                      "type": "Input.Toggle",
+                      "id": "attestCheck",
+                      "title": "I confirm the statements above",
+                      "valueOn": "yes",
+                      "valueOff": "no",
+                      "value": "no",
+                      "isRequired": true,
+                      "errorMessage": "Please confirm to submit.",
+                      "label": "Attestation Confirmation"
+                    }
+                  ],
+                  "actions": [
+                    {
+                      "type": "Action.Submit",
+                      "title": "Submit to HR",
+                      "style": "positive",
+                      "data": {
+                        "attestChoice": "submit"
+                      }
+                    },
+                    {
+                      "type": "Action.Submit",
+                      "title": "Go back",
+                      "associatedInputs": "none",
+                      "data": {
+                        "attestChoice": "back"
+                      }
+                    }
+                  ]
+                }
+              output:
+                binding:
+                  actionSubmitId: Topic.actionSubmitId
+                  attestCheck: Topic.attestCheck
+                  attestChoice: Topic.attestChoice
+                  hrbp: Topic.SelectedHRBP
+
+              outputType:
+                properties:
+                  actionSubmitId: String
+                  attestCheck: String
+                  attestChoice: String
+                  hrbp: String
+
+            - kind: ConditionGroup
+              id: conditionGroup_cvsKZa
+              conditions:
+                - id: conditionItem_p8Si42
+                  condition: =Topic.attestChoice = "back"
+                  actions:
+                    - kind: SetVariable
+                      id: setVariable_L742vN
+                      variable: Topic.Ask
+                      value: No problem, nothing has been sent. When you're ready, choose an option below.
+
+                    - kind: GotoAction
+                      id: KE9Lm1
+                      actionId: question_7s2x42
+
+                - id: conditionItem_sbNoHRBP
+                  condition: =IsBlank(Topic.SelectedHRBP)
+                  actions:
+                    - kind: SendActivity
+                      id: sendActivity_sbNoHRBP
+                      activity: Please choose an **HR Business Partner** on the card to submit, or choose _Go back_.
+
+                    - kind: GotoAction
+                      id: gotoAction_sbNoHRBP
+                      actionId: NM7XC9
+
+                - id: conditionItem_cFaMpg
+                  condition: =Topic.attestCheck <> "yes"
+                  actions:
+                    - kind: SendActivity
+                      id: sendActivity_KD2uFA
+                      activity: Please check **I confirm the statements above** to submit, or choose _Go Back_.
+
+                    - kind: GotoAction
+                      id: liYENh
+                      actionId: NM7XC9
+
+            - kind: InvokeFlowAction
+              id: invokeFlowAction_atJE07
+              latencyMessageSettings:
+                allowLatencyMessage: true
+                latencyMessage:
+                  text:
+                    - _Putting together your submission, please wait a moment..._
+                    - _Almost there! Putting together your submission..._
+                    - _Preparing your submission. This may take a moment..._
+                    - _Getting your submission ready. One moment, please..._
+                    - _Processing your submission. Please wait a moment..._
+                    - _One moment while I prepare your submission..._
+                    - _Hang tight while I get your submisison ready..._
+                    - _Preparing your submission with the information you provided..._
+                    - _I'm getting your submission ready now..._
+                    - _Putting everything together for your submission. This may take a moment..._
+                    - _Preparing your submission for HR review. Please wait a moment..._
+
+              input:
+                binding:
+                  boolean: =Global.TitleReviewRequested
+                  text: =Global.OriginalJD.Title
+                  text_1: =Global.OriginalJD.JobCode
+                  text_10: "=If(Boolean(Topic.F.level_match), Text(Topic.F.matched_level_title) & \": \" & Text(Topic.F.level_recommendation), \"\")"
+                  text_11: =If(Global.TitleReviewRequested, Topic.ProposedTitle, "")
+                  text_12: =If(Global.TitleReviewRequested, Topic.TitleJustification, "")
+                  text_13: =Text(Topic.F.title_support_assessment)
+                  text_14: =Text(Topic.F.hr_summary)
+                  text_15: =Global.Changes.Purpose
+                  text_16: =Global.Changes.PrincipalDuties
+                  text_17: =Global.Changes.Education
+                  text_18: =Global.Changes.WorkExperience
+                  text_19: =Global.Changes.Certifications
+                  text_2: =System.User.Email
+                  text_20: =Global.Changes.KSA
+                  text_21: =Topic.FinalJSON
+                  text_22: =Global.ManagerNotes
+                  text_23: =Topic.BusinessReason
+                  text_24: =Topic.AttestationText
+                  text_25: =Global.RelatedLevels
+                  text_3: =Topic.SectionsChanged
+                  text_4: =Global.AddedSections
+                  text_5: =Global.UpdateReasons
+                  text_6: =Global.OtherReason
+                  text_7: =Topic.ChangesText
+                  text_8: =Topic.IndirectConfirmations
+                  text_9: =Global.HardStopLog
+
+              output:
+                binding:
+                  doclink: Topic.DocLink
+                  requestid: Topic.RequestID
+
+              flowId: c79ef120-74c2-f111-aaad-6045bd005343
+
+            - kind: SetVariable
+              id: setVariable_bNs8uy
+              variable: Topic.DocLine
+              value: |-
+                =If(
+                  IsBlank(Topic.DocLink),
+                  "",
+                  Char(10) & Char(10) & "Here's a copy of your request for your records: [Download your copy](" & Topic.DocLink & ")"
+                )
+
+            - kind: SetVariable
+              id: setVariable_CUHUHu
+              variable: Topic.SubmitStatus
+              value: ="Submitted"
+
+            - kind: SetVariable
+              id: setVariable_FDqGgS
+              variable: Topic.NotesLine
+              value: =If(IsBlank(Global.ManagerNotes), "", Char(10) & Char(10) & "Your notes for HR were included.")
+
+            - kind: SendActivity
+              id: sendActivity_wtIwj0
+              activity: |-
+                **Submitted!** Your request for **{Global.OriginalJD.Title}** is with HR for review (reference#{Topic.RequestID}).{Topic.DocLine}<br />
+                {Topic.NotesLine}
+
+            - kind: BeginDialog
+              id: okY18F
+              input:
+                binding:
+                  Mode: ="Reset"
+
+              dialog: cr87b_JOBJARVIS.topic.CancelorSwitchJDUpdate
+              output:
+                binding:
+                  SwitchStatus: Topic.SwitchStatus
+
+        - id: conditionItem_DUlJ52
+          condition: =Topic.Decision = 'cr87b_JOBJARVIS.topic.SubmitJDUpdate.main.question_7s2x42'.'Make more changes'
+          actions:
+            - kind: SendActivity
+              id: sendActivity_i34HBT
+              activity: Sure, what would you like to change?
+
+            - kind: EndDialog
+              id: gFjzSk
+
+        - id: conditionItem_KjlPOX
+          condition: =Topic.Decision = 'cr87b_JOBJARVIS.topic.SubmitJDUpdate.main.question_7s2x42'.'Cancel this update'
+          actions:
+            - kind: BeginDialog
+              id: Z1dG5e
+              input:
+                binding:
+                  Mode: ="Cancel"
+
+              dialog: cr87b_JOBJARVIS.topic.CancelorSwitchJDUpdate
+              output:
+                binding:
+                  SwitchStatus: Topic.SwitchStatus
+
+      elseActions:
+        - kind: SetVariable
+          id: setVariable_dXZWAb
+          variable: Topic.Turns
+          value: =Topic.Turns + 1
+
+        - kind: ConditionGroup
+          id: conditionGroup_7J0PJ9
+          conditions:
+            - id: conditionItem_qIhSgk
+              condition: =Topic.Turns > 8
+              actions:
+                - kind: SetVariable
+                  id: setVariable_FSfZxh
+                  variable: Topic.Ask
+                  value: "=\"We've covered a lot. Let's try wrapping up: submit it to HR, make more changes, or cancel?\""
+
+                - kind: GotoAction
+                  id: J2EEhF
+                  actionId: question_7s2x42
+
+        - kind: SetVariable
+          id: setVariable_4BgXAe
+          variable: Topic.UserMsg
+          value: =System.Activity.Text
+
+        - kind: InvokeAIBuilderModelAction
+          id: invokeAIBuilderModelAction_BLN4d9
+          input:
+            binding:
+              ChangesText: =Topic.ChangesText
+              PendingQuestion: ="None"
+              RecentExchange: =Topic.QALog
+              RelatedLevels: =If(IsBlank(Global.RelatedLevels), "None. This job has no other levels.", Global.RelatedLevels)
+              ReviewContext: =Topic.ReviewContext
+              UserMessage: =Topic.UserMsg
+
+          output:
+            binding:
+              predictionOutput: Topic.Router
+
+          aIModelId: 6dba47c8-fc2d-41c9-b694-3cd06332e533
+
+        - kind: SetVariable
+          id: setVariable_6MMB2o
+          variable: Topic.RT
+          value: =ParseJSON(Topic.Router.text)
+
+        - kind: SetVariable
+          id: setVariable_Q3vRuf
+          variable: Topic.Intent
+          value: =Lower(Trim(Text(Topic.RT.intent)))
+
+        - kind: SetVariable
+          id: setVariable_qw7GKq
+          variable: Topic.RAnswer
+          value: =Text(Topic.RT.answer)
+
+        - kind: SetVariable
+          id: setVariable_jtC2HV
+          variable: Topic.RNext
+          value: =If(IsBlank(Text(Topic.RT.next_question)), "Anything else about this request, or ready to submit?", Text(Topic.RT.next_question))
+
+        - kind: SetVariable
+          id: setVariable_uZxa55
+          variable: Topic.RSection
+          value: =Text(Topic.RT.section)
+
+        - kind: SetVariable
+          id: setVariable_JJvQY6
+          variable: Topic.RNote
+          value: =Text(Topic.RT.note)
+
+        - kind: SetVariable
+          id: setVariable_WVNKET
+          variable: Topic.RField
+          value: =Text(Topic.RT.field)
+
+        - kind: SetVariable
+          id: setVariable_fmQj1Z
+          variable: Topic.QALog
+          value: |-
+            =Right(
+              If(Topic.QALog = "None", "", Topic.QALog & Char(10)) &
+              "Manager: " & Topic.UserMsg & Char(10) & "Agent: " & Topic.RAnswer,
+              3000
+            )
+
+        - kind: ConditionGroup
+          id: conditionGroup_u2x5rc
+          conditions:
+            - id: conditionItem_Izo2Tu
+              condition: =Topic.Intent = "answer"
+              actions:
+                - kind: SendActivity
+                  id: sendActivity_NapMwg
+                  activity: "{Topic.RAnswer}"
+
+                - kind: SetVariable
+                  id: setVariable_1E5gV4
+                  variable: Topic.Ask
+                  value: =Topic.RNext
+
+                - kind: GotoAction
+                  id: vxF6Kd
+                  actionId: question_7s2x42
+
+            - id: conditionItem_RBfxWD
+              condition: =Topic.Intent = "hr_note"
+              actions:
+                - kind: ConditionGroup
+                  id: conditionGroup_0i5Dgo
+                  conditions:
+                    - id: conditionItem_3p2ZYs
+                      condition: false
+
+                  elseActions:
+                    - kind: SetVariable
+                      id: CfYZ0M
+                      variable: Global.ManagerNotes
+                      value: =If(IsBlank(Global.ManagerNotes), "- " & Topic.RNote, Global.ManagerNotes & Char(10) & "- " & Topic.RNote)
+
+                    - kind: SendActivity
+                      id: ZhOGcC
+                      activity: "{Topic.RAnswer}"
+
+                    - kind: SetVariable
+                      id: kZfYMS
+                      variable: Topic.Ask
+                      value: =Topic.RNext
+
+                    - kind: GotoAction
+                      id: OjMUj9
+                      actionId: question_7s2x42
+
+            - id: conditionItem_VuWSnW
+              condition: =Topic.Intent = "submit"
+              actions:
+                - kind: ConditionGroup
+                  id: conditionGroup_AuqMxP
+                  conditions:
+                    - id: conditionItem_SBGrdZ
+                      condition: =!IsBlank(Topic.RNote)
+                      actions:
+                        - kind: SetVariable
+                          id: setVariable_x2nRQT
+                          variable: Global.ManagerNotes
+                          value: =If(IsBlank(Global.ManagerNotes), "- " & Topic.RNote, Global.ManagerNotes & Char(10) & "- " & Topic.RNote)
+
+                - kind: SetVariable
+                  id: setVariable_vXaCbN
+                  variable: Topic.Ask
+                  value: =If(IsBlank(Topic.RNote), "", "I've added your note for HR. ") & "Tap **Submit to HR** below to send it."
+
+                - kind: GotoAction
+                  id: JaC7Ca
+                  actionId: question_7s2x42
+
+            - id: conditionItem_WgV2b2
+              condition: =Topic.Intent = "restricted"
+              actions:
+                - kind: BeginDialog
+                  id: maBlHx
+                  input:
+                    binding:
+                      Field: =If(IsBlank(Topic.RField), "Restricted field", Topic.RField)
+                      UserRequest: =Topic.UserMsg
+
+                  dialog: cr87b_JOBJARVIS.topic.LogHardStop
+                  output:
+                    binding:
+                      Logged: Topic.Logged
+
+                - kind: SendActivity
+                  id: sendActivity_OXJP37
+                  activity: "{Topic.RAnswer}"
+
+                - kind: SetVariable
+                  id: setVariable_qgUgOc
+                  variable: Topic.Ask
+                  value: =Topic.RNext
+
+                - kind: GotoAction
+                  id: z6g3zt
+                  actionId: question_7s2x42
+
+            - id: conditionItem_DH6xr5
+              condition: =Topic.Intent = "off_topic"
+              actions:
+                - kind: SearchAndSummarizeContent
+                  id: iYLTLJ
+                  latencyMessageSettings:
+                    allowLatencyMessage: false
+
+                  userInput: =Topic.UserMsg
+                  fileSearchDataSource:
+                    searchFilesMode:
+                      kind: SearchAllFiles
+
+                  knowledgeSources:
+                    kind: SearchAllKnowledgeSources
+
+                  sharePointSearchDataSource: {}
+
+                - kind: SetVariable
+                  id: setVariable_Y2hJeH
+                  variable: Topic.Ask
+                  value: "=\"Back to your request: anything else about it, or ready to submit?\""
+
+                - kind: GotoAction
+                  id: 5CySQr
+                  actionId: question_7s2x42
+
+            - id: conditionItem_zgSAv8
+              condition: =Topic.Intent = "edit"
+              actions:
+                - kind: ConditionGroup
+                  id: conditionGroup_v8589I
+                  conditions:
+                    - id: conditionItem_cbPQEh
+                      condition: =Topic.RSection in [ "Purpose", "PrincipalDuties", "Education", "WorkExperience", "Certifications", "KSA" ]
+                      actions:
+                        - kind: SendActivity
+                          id: sendActivity_Dit8tZ
+                          activity: Sure, let's update that.
+
+                        - kind: BeginDialog
+                          id: qQWSmn
+                          input:
+                            binding:
+                              SectionName: =Topic.RSection
+
+                          dialog: cr87b_JOBJARVIS.topic.ShowJDSection
+                          output:
+                            binding:
+                              SectionShown: Topic.SectionShown
+
+                  elseActions:
+                    - kind: SendActivity
+                      id: sendActivity_FdsCBg
+                      activity: Sure. Which section would you like to change?
+
+                - kind: EndDialog
+                  id: ZlZgfa
+
+            - id: conditionItem_2olofC
+              condition: =Topic.Intent = "cancel"
+              actions:
+                - kind: BeginDialog
+                  id: JNxJOe
+                  input:
+                    binding:
+                      Mode: ="Cancel"
+
+                  dialog: cr87b_JOBJARVIS.topic.CancelorSwitchJDUpdate
+                  output:
+                    binding:
+                      SwitchStatus: Topic.SwitchStatus
+
+                - kind: ConditionGroup
+                  id: conditionGroup_inaUGP
+                  conditions:
+                    - id: conditionItem_TWMe75
+                      condition: =Global.UpdateInProgress = true
+                      actions:
+                        - kind: SetVariable
+                          id: setVariable_s4JnVI
+                          variable: Topic.Ask
+                          value: ="No problem. What would you like to do?"
+
+                        - kind: GotoAction
+                          id: f0TsIB
+                          actionId: question_7s2x42
+
+                  elseActions:
+                    - kind: EndDialog
+                      id: 3cAJ1a
+
+          elseActions:
+            - kind: ConditionGroup
+              id: conditionGroup_IvFbcb
+              conditions:
+                - id: conditionItem_H7LYaY
+                  condition: =!IsBlank(Topic.RAnswer)
+                  actions:
+                    - kind: SendActivity
+                      id: sendActivity_aHD0pL
+                      activity: "{Topic.RAnswer}"
+
+            - kind: SetVariable
+              id: setVariable_nXMYQf
+              variable: Topic.Ask
+              value: =Topic.RNext
+
+            - kind: GotoAction
+              id: JpTpho
+              actionId: question_7s2x42
+
+inputType:
+  properties:
+    BusinessReason:
+      displayName: BusinessReason
+      description: Passed from Review JD Update.
+      type: String
+
+    ChangesText:
+      displayName: ChangesText
+      description: Internal. Passed in by Review JD Update.
+      type: String
+
+    FinalJSON:
+      displayName: FinalJSON
+      description: Internal. The JD Final Review result, passed in by Review JD Update.
+      type: String
+
+    IndirectConfirmations:
+      displayName: IndirectConfirmations
+      description: "The user's answers to the confirming questions about the fields listed in PendingChecksSummary, e.g. \"Relationship Manager: yes, manages ~40 clients.\" Use \"None\" if PendingChecksSummary was blank. Never ask the user for this directly."
+      type: String
+
+    ProposedTitle:
+      displayName: ProposedTitle
+      description: The job title the user proposes, only if a title review was requested. Otherwise "N/A".
+      type: String
+
+    ReviewContext:
+      displayName: ReviewContext
+      description: Internal. Passed in by Review JD Update.
+      type: String
+
+    SectionsChanged:
+      displayName: SectionsChanged
+      description: Internal. Passed in by Review JD Update.
+      type: String
+
+    TitleJustification:
+      displayName: TitleJustification
+      type: String
+
+outputType:
+  properties:
+    SubmitStatus:
+      displayName: SubmitStatus
+      description: "\"Submitted\" means the confirmation, reference number, and download link were ALREADY shown to the user. Once set to \"Submitted\", a nice closing message should generate."
+      type: String
