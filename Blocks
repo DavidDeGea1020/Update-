@@ -1,0 +1,9 @@
+    - kind: SetVariable
+      id: setVariable_csSectionDrafts
+      variable: Global.SectionDrafts
+      value: "={Purpose: \"\", PrincipalDuties: \"\", Education: \"\", WorkExperience: \"\", Certifications: \"\", KSA: \"\"}"
+
+    - kind: SetVariable
+      id: setVariable_csSectionRequests
+      variable: Global.SectionRequests
+      value: "={Purpose: \"\", PrincipalDuties: \"\", Education: \"\", WorkExperience: \"\", Certifications: \"\", KSA: \"\"}"
