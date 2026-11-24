@@ -1,0 +1,227 @@
+kind: AdaptiveDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: Mode
+    description: "\"Cancel\" if the user wants to stop or discard the update, \"Switch\" if they want to update a different job instead, \"Reset\" only when called after a successful submission."
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: NewJob
+    description: The job the user wants to switch to, if they named one (e.g., "Universal Banker Senior"). Leave blank if they didn't name a job.
+    shouldPromptUser: false
+
+modelDescription: "Discards the job description update in progress. Use only while an update is in progress and the user explicitly asks to cancel, discard, stop, or start over (Mode Cancel), or to update a different job instead (Mode Switch). Do not use when the user is simply finished with the conversation or declining further help (for example \"that's it\", \"no thanks\", \"all done\"). Call it once per request: it asks the user to confirm and handles the reply itself."
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent: {}
+  actions:
+    - kind: SetVariable
+      id: setVariable_csMode
+      variable: Topic.ModeKey
+      value: =If(IsBlank(Trim(Topic.Mode)), "Cancel", Proper(Trim(Topic.Mode)))
+
+    - kind: ConditionGroup
+      id: conditionGroup_csNothing
+      conditions:
+        - id: conditionItem_csNothing
+          condition: =Topic.ModeKey = "Cancel" && Global.UpdateInProgress <> true
+          actions:
+            - kind: SendActivity
+              id: sendActivity_csNothing
+              activity: There's no job description update in progress right now, so there's nothing to discard. Anything else I can help with?
+
+            - kind: CancelAllDialogs
+              id: cancelAllDialogs_csNothing
+
+    - kind: ConditionGroup
+      id: conditionGroup_csConfirm
+      conditions:
+        - id: conditionItem_csConfirm
+          condition: =Topic.ModeKey <> "Reset" && Global.UpdateInProgress = true
+          actions:
+            - kind: SetVariable
+              id: setVariable_csPrompt
+              variable: Topic.ConfirmPrompt
+              value: |-
+                =If(
+                    Topic.ModeKey = "Switch",
+                    "Switching jobs will discard your update to **" & Global.OriginalJD.Title & "**. Nothing has been sent to HR yet. Discard it and switch?",
+                    "Discard your update to **" & Global.OriginalJD.Title & "**? Nothing has been sent to HR, and the changes you've saved will be cleared."
+                )
+
+            - kind: Question
+              id: question_yWL5R4
+              interruptionPolicy:
+                allowInterruption: false
+
+              repeatCount: 1
+              alwaysPrompt: true
+              variable: init:Topic.Confirm
+              prompt: "{Topic.ConfirmPrompt}"
+              entity:
+                kind: EmbeddedEntity
+                definition:
+                  kind: ClosedListEntity
+                  items:
+                    - id: Yes, discard
+                      displayName: Yes, discard
+                      synonyms:
+                        - cancel it
+                        - delete it
+                        - I'm sure
+                        - go ahead
+                        - do it
+                        - confirm
+                        - discard
+                        - yep
+                        - yeah
+                        - yes
+
+                    - id: No, keep going
+                      displayName: No, keep going
+                      synonyms:
+                        - never mind
+                        - wait
+                        - don't cancel
+                        - continue
+                        - go back
+                        - keep it
+                        - keep going
+                        - nope
+                        - no
+
+            - kind: ConditionGroup
+              id: conditionGroup_y4UkDv
+              conditions:
+                - id: conditionItem_H2bENa
+                  condition: =IsBlank(Topic.Confirm) || Topic.Confirm <> 'cr87b_JOBJARVIS.topic.CancelorSwitchJDUpdate.main.question_yWL5R4'.'Yes, discard'
+                  actions:
+                    - kind: SendActivity
+                      id: sendActivity_vQ6ASR
+                      activity: No problem, nothing was discarded. Let's pick up where we left off.
+
+                    - kind: EndDialog
+                      id: vGp58K
+
+    - kind: SetVariable
+      id: setVariable_a6ncPc
+      variable: Global.UpdateInProgress
+      value: =false
+
+    - kind: SetVariable
+      id: setVariable_F1zzpg
+      variable: Global.SelectedSections
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_MxGnIx
+      variable: Global.AddedSections
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_elXrDq
+      variable: Global.UpdateReasons
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_bqnHSm
+      variable: Global.OtherReason
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_zb3rzj
+      variable: Global.TitleReviewRequested
+      value: =false
+
+    - kind: SetVariable
+      id: setVariable_AXoZYd
+      variable: Global.HardStopLog
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_VMenuA
+      variable: Global.ManagerNotes
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_PBcq7d
+      variable: Global.FollowupsDone
+      value: =false
+
+    - kind: SetVariable
+      id: setVariable_Fdnj0t
+      variable: Global.Changes
+      value: "={Purpose: \"\", PrincipalDuties: \"\", Education: \"\", WorkExperience: \"\", Certifications: \"\", KSA: \"\"}"
+
+    - kind: SetVariable
+      id: setVariable_3Ui329
+      variable: Global.PendingChecks
+      value: "={PeopleManagement: \"\", SalesNonSales: \"\", RelationshipManager: \"\", NMLS: \"\"}"
+
+    - kind: SetVariable
+      id: setVariable_csSectionChecks
+      variable: Global.SectionChecks
+      value: "={Purpose: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, PrincipalDuties: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, Education: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, WorkExperience: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, Certifications: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, KSA: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}}"
+
+    - kind: SetVariable
+      id: setVariable_csBusinessReason
+      variable: Global.BusinessReason
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_csProposedTitle
+      variable: Global.ProposedTitle
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_csTitleJustification
+      variable: Global.TitleJustification
+      value: =""
+
+    - kind: ConditionGroup
+      id: conditionGroup_7TrUHA
+      conditions:
+        - id: conditionItem_jkzDX6
+          condition: =Topic.ModeKey = "Switch"
+          actions:
+            - kind: SetVariable
+              id: setVariable_VCCiZD
+              variable: Topic.SwitchStatus
+              value: =If(IsBlank(Topic.NewJob), "Switched, no job named", "Switched to " & Topic.NewJob)
+
+            - kind: EndDialog
+              id: endDialog_csSwitch
+
+        - id: conditionItem_vPpUL3
+          condition: =Topic.ModeKey = "Cancel"
+          actions:
+            - kind: SendActivity
+              id: sendActivity_veSn1O
+              activity: Update discarded. Nothing was sent to HR. Anything else I can help with?
+
+            - kind: CancelAllDialogs
+              id: cancelAllDialogs_csDone
+
+      elseActions:
+        - kind: EndDialog
+          id: QzR8er
+
+inputType:
+  properties:
+    Mode:
+      displayName: Mode
+      description: "\"Cancel\" if the user wants to stop or discard the update, \"Switch\" if they want to update a different job instead, \"Reset\" only when called after a successful submission."
+      type: String
+
+    NewJob:
+      displayName: NewJob
+      description: The job the user wants to switch to, if they named one (e.g., "Universal Banker Senior"). Leave blank if they didn't name a job.
+      type: String
+
+outputType:
+  properties:
+    SwitchStatus:
+      displayName: SwitchStatus
+      description: "Only set after a confirmed switch. If it starts with \"Switched to\", find that job with JOB DESCRIPTION SEARCHER and ask the user to confirm it; do NOT start a new update until they confirm and have seen that job's description. If it is \"Switched, no job named\", ask which job they want."
+      type: String
