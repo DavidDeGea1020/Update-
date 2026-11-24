@@ -1,0 +1,80 @@
+kind: AdaptiveDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: EarlierAnswer
+    description: "Only if the user typed a question while the starting cards were open: your answer to it, in one or two plain sentences written for the manager (ground job description questions in the JD Agent Playbook and JD_Update_Quality_Guide.md). Leave empty if the user asked nothing."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+modelDescription: "Shows the first section of a job description update. Call it only immediately after Start JD Update returns a status that starts with \"Update started\", in the same turn, and only once. Pass EarlierAnswer only if the user typed a question while the cards were open."
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent: {}
+  actions:
+    - kind: ConditionGroup
+      id: conditionGroup_bfNoUpdate
+      conditions:
+        - id: conditionItem_bfNoUpdate
+          condition: =Global.UpdateInProgress <> true
+          actions:
+            - kind: SetVariable
+              id: setVariable_bfStatusNone
+              variable: Topic.FirstSectionStatus
+              value: ="No update in progress. Do not show any section."
+
+            - kind: EndDialog
+              id: endDialog_bfNoUpdate
+
+    - kind: ConditionGroup
+      id: conditionGroup_bfAnswer
+      conditions:
+        - id: conditionItem_bfAnswer
+          condition: =!IsBlank(Trim(Topic.EarlierAnswer))
+          actions:
+            - kind: SendActivity
+              id: sendActivity_bfAnswer
+              activity: "**About your earlier question:** {Topic.EarlierAnswer}"
+
+    - kind: ConditionGroup
+      id: conditionGroup_bfShow
+      conditions:
+        - id: conditionItem_bfShow
+          condition: =!IsBlank(Global.SelectedSections)
+          actions:
+            - kind: BeginDialog
+              id: beginDialog_bfShow
+              input:
+                binding:
+                  SectionName: =First(Split(Global.SelectedSections, ",")).Value
+
+              dialog: cr87b_JOBJARVIS.topic.ShowJDSection
+              output:
+                binding:
+                  SectionShown: Topic.SectionShown
+                  VersionShown: Topic.VersionShown
+
+            - kind: SetVariable
+              id: setVariable_bfStatusShown
+              variable: Topic.FirstSectionStatus
+              value: ="The first section is on screen. Ask in one short sentence what they would like to change in it. Do not repeat the section, and do not answer the earlier question again."
+
+      elseActions:
+        - kind: SetVariable
+          id: setVariable_bfStatusNoSection
+          variable: Topic.FirstSectionStatus
+          value: ="No sections were selected; only a title review was requested. Ask in one short sentence which section they would like to update first. Do not answer the earlier question again."
+
+inputType:
+  properties:
+    EarlierAnswer:
+      displayName: EarlierAnswer
+      description: "Only if the user typed a question while the starting cards were open: your answer to it, in one or two plain sentences written for the manager (ground job description questions in the JD Agent Playbook and JD_Update_Quality_Guide.md). Leave empty if the user asked nothing."
+      type: String
+
+outputType:
+  properties:
+    FirstSectionStatus:
+      displayName: FirstSectionStatus
+      description: "What to say next. Follow it exactly, in one short sentence, with nothing else added."
+      type: String
