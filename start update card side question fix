@@ -1,0 +1,760 @@
+kind: AdaptiveDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: CurrentJDJson
+    description: Not used. Leave blank. Never ask the user for this value.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: RequestedField
+    description: Not used. Leave blank. Never ask the user for this value.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: JobDescriptionAlreadyShown
+    description: Not used. Leave blank. Never ask the user for this value.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: varUpdateActive
+    description: Not used. Leave blank.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: JobTitle
+    description: The exact jobTitle from the same JOB DESCRIPTION SEARCHER result as JobCode. If the tool returned multiple matches, use the result explicitly selected by the user. Do not infer, rewrite, or normalize the title.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: JobCode
+    description: The exact jobCode from the specific JOB DESCRIPTION SEARCHER result selected by the user, or from the tool's clear winning result. Pass it exactly as returned by the tool. It must correspond to JobTitle. Never ask the user for the job code and never display it.
+    shouldPromptUser: false
+
+modelDescription: |-
+  Starts a job description update after the user has confirmed which job they want to update. Use when the user wants to update, edit, change, or revise a job description and a job has been confirmed. Do not use for viewing a job description only.
+
+  Only use after the user has explicitly confirmed this specific job in the conversation. Never use right after Cancel or Switch JD Update without a new job match and confirmation.
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent: {}
+  actions:
+    - kind: ConditionGroup
+      id: conditionGroup_Wjiylf
+      conditions:
+        - id: conditionItem_HUw3um
+          condition: =Global.UpdateInProgress = true
+          actions:
+            - kind: SendActivity
+              id: sendActivity_e493aE
+              activity: You already have an update in progress for **{Global.OriginalJD.Title}**. Want to keep working on it, or discard it and start a new one?
+
+            - kind: SetVariable
+              id: setVariable_InProgStatus
+              variable: Topic.UpdateStatus
+              value: "=\"Not started: an update for \" & Global.OriginalJD.Title & \" is already in progress. The question above was already shown; wait for the user's answer and do not add another reply.\""
+
+            - kind: CancelAllDialogs
+              id: cancelAllDialogs_suInProgress
+
+      elseActions:
+        - kind: BeginDialog
+          id: xttZpn
+          input:
+            binding:
+              text: =Topic.JobCode
+
+          dialog: cr87b_JOBJARVIS.action.GetJDRequesterView
+          output:
+            binding:
+              certificationslicenses: Topic.certificationslicenses
+              educationrequirements: Topic.educationrequirements
+              found: Topic.found
+              jdjson: Topic.jdjson
+              jobtitle: Topic.jobtitle
+              ksas: Topic.ksas
+              nmlsrequired: Topic.nmlsrequired
+              peoplemanagement: Topic.peoplemanagement
+              principalduties: Topic.principalduties
+              purpose: Topic.purpose
+              relationshipmanager: Topic.relationshipmanager
+              salesdesignation: Topic.salesdesignation
+              workexperiencerequirements: Topic.workexperiencerequirements
+
+        - kind: ConditionGroup
+          id: conditionGroup_NotFound
+          conditions:
+            - id: conditionItem_NotFound
+              condition: =Lower(Text(Topic.found)) <> "true"
+              actions:
+                - kind: SendActivity
+                  id: sendActivity_NotFound
+                  activity: I couldn't load the current job description for **{Topic.JobTitle}** right now, so I can't start the update yet. Please try again in a moment.
+
+                - kind: SetVariable
+                  id: setVariable_NotFoundStatus
+                  variable: Topic.UpdateStatus
+                  value: "=\"Not started: the job description could not be loaded. A message was already shown; do not add another reply or invent job details.\""
+
+                - kind: CancelAllDialogs
+                  id: cancelAllDialogs_suNotFound
+
+        - kind: InvokeFlowAction
+          id: invokeFlowAction_z6qtzn
+          input:
+            binding:
+              text: =Topic.JobCode
+              text_1: =Topic.JobTitle
+
+          output:
+            binding:
+              relatedcount: Topic.RelatedCount
+              relatedjson: Topic.RelatedJson
+
+          flowId: ade64c16-27bc-f111-aaad-6045bd005343
+
+    - kind: SetVariable
+      id: setVariable_Yc3eCg
+      variable: Global.OriginalJD
+      value: |-
+        ={
+          JobCode: Topic.JobCode,   
+          Title: Coalesce(Topic.jobtitle, Topic.JobTitle),
+          Purpose: Topic.purpose,
+          PrincipalDuties: Topic.principalduties,
+          Education: Topic.educationrequirements,
+          WorkExperience: Topic.workexperiencerequirements,
+          Certifications: Topic.certificationslicenses,
+          KSA: Topic.ksas,
+          PeopleManagement: Topic.peoplemanagement,
+          SalesNonSales: Topic.salesdesignation,
+          RelationshipManager: Topic.relationshipmanager,
+          NMLS: Topic.nmlsrequired
+        }
+
+    - kind: SetVariable
+      id: setVariable_8UcjoA
+      variable: Global.OriginalJDText
+      value: |-
+        ="Job Title: " & Global.OriginalJD.Title & Char(10) &
+        "People Management: " & Global.OriginalJD.PeopleManagement & Char(10) &
+        "Sales/Non-Sales: " & Global.OriginalJD.SalesNonSales & Char(10) &
+        "Relationship Manager: " & Global.OriginalJD.RelationshipManager & Char(10) &
+        "NMLS Required: " & Global.OriginalJD.NMLS & Char(10) & Char(10) &
+        "Purpose:" & Char(10) & Global.OriginalJD.Purpose & Char(10) & Char(10) &
+        "Principal Duties and Responsibilities:" & Char(10) & Global.OriginalJD.PrincipalDuties & Char(10) & Char(10) &
+        "Education Requirements:" & Char(10) & Global.OriginalJD.Education & Char(10) & Char(10) &
+        "Work Experience Requirements:" & Char(10) & Global.OriginalJD.WorkExperience & Char(10) & Char(10) &
+        "Certifications and Licenses:" & Char(10) & Global.OriginalJD.Certifications & Char(10) & Char(10) &
+        "Knowledge, Skills and Abilities:" & Char(10) & Global.OriginalJD.KSA
+
+    - kind: SetVariable
+      id: setVariable_ZSz1ig
+      variable: Global.RelatedLevels
+      value: =Topic.RelatedJson
+
+    - kind: SetVariable
+      id: setVariable_afvs0n
+      variable: Topic.Said
+      value: =Lower(System.Activity.Text)
+
+    - kind: SetVariable
+      id: setVariable_pTMEHU
+      variable: Topic.Mentioned
+      value: |-
+        =Filter(
+          Table(
+            {Name: "Purpose",                 Hit: "purpose" in Topic.Said},
+            {Name: "Principal Duties and Responsibilities",        Hit: "dut" in Topic.Said || "responsib" in Topic.Said},
+            {Name: "Education Requirements",               Hit: "educat" in Topic.Said || "degree" in Topic.Said},
+            {Name: "Work Experience Requirements",         Hit: "work experience" in Topic.Said || "years of experience" in Topic.Said},
+            {Name: "Certifications and Licenses", Hit: "certif" in Topic.Said || "licens" in Topic.Said},
+            {Name: "Knowledge, Skills and Abilities",                    Hit: "ksa" in Topic.Said || "skill" in Topic.Said || "knowledge" in Topic.Said || "abilit" in Topic.Said},
+            {Name: "Title",               Hit: "job title" in Topic.Said || "the title" in Topic.Said || "retitle" in Topic.Said}
+          ),
+          Hit
+        )
+
+    - kind: SetVariable
+      id: setVariable_grftDx
+      variable: Topic.StartMessage
+      value: |-
+        =With(
+          {c: CountRows(Topic.Mentioned)},
+          If(
+            c = 0,
+            "Let's get started. Select the sections you want to change on the card below, then tell me why on the next one.",
+            "Got it. To get started on that, select " &
+              If(
+                c = 1,
+                "**" & First(Topic.Mentioned).Name & "**",
+                "**" & Concat(FirstN(Topic.Mentioned, c - 1), Name, "**, **") & "** and **" & Last(Topic.Mentioned).Name & "**"
+              ) &
+              " on the card below, then tell me why you're making the update on the next card."
+          )
+        )
+
+    - kind: SendActivity
+      id: sendActivity_vGbUqt
+      activity: "{Topic.StartMessage}"
+
+    - kind: SetVariable
+      id: setVariable_suTries1
+      variable: Topic.CardTries
+      value: =0
+
+    - kind: AdaptiveCardPrompt
+      id: Gy0cdA
+      interruptionPolicy:
+        allowInterruption: false
+
+      card: |-
+        {
+          "type": "AdaptiveCard",
+          "$schema": "https://adaptivecards.io/schemas/adaptive-card.json",
+          "version": "1.5",
+          "body": [
+            {
+              "type": "TextBlock",
+              "text": "Which sections would you like to update?",
+              "weight": "Bolder",
+              "size": "Medium",
+              "wrap": true
+            },
+            {
+              "type": "TextBlock",
+              "text": "Pick as many as you need. You can add more later if something comes up.",
+              "isSubtle": true,
+              "wrap": true
+            },
+            {
+              "type": "Input.ChoiceSet",
+              "id": "sections",
+              "label": "Sections to update",
+              "isMultiSelect": true,
+              "style": "expanded",
+              "isRequired": true,
+              "errorMessage": "Pick at least one section.",
+              "choices": [
+                {
+                  "title": "Purpose",
+                  "value": "Purpose"
+                },
+                {
+                  "title": "Principal Duties and Responsibilities",
+                  "value": "PrincipalDuties"
+                },
+                {
+                  "title": "Education Requirements",
+                  "value": "Education"
+                },
+                {
+                  "title": "Work Experience Requirements",
+                  "value": "WorkExperience"
+                },
+                {
+                  "title": "Certifications and Licenses",
+                  "value": "Certifications"
+                },
+                {
+                  "title": "Knowledge, Skills and Abilities",
+                  "value": "KSA"
+                },
+                {
+                  "title": "Title",
+                  "value": "Title"
+                }
+              ]
+            },
+            {
+              "type": "TextBlock",
+              "text": "Title requests a title review. It's submitted along with at least one section change.",
+              "isSubtle": true,
+              "size": "Small",
+              "wrap": true
+            }
+          ],
+          "actions": [
+            {
+              "type": "Action.Submit",
+              "id": "continue",
+              "title": "Next",
+              "style": "positive"
+            },
+            {
+              "type": "Action.Submit",
+              "id": "cancel",
+              "title": "Cancel",
+              "associatedInputs": "none"
+            }
+          ]
+        }
+      output:
+        binding:
+          actionSubmitId: Topic.actionSubmitId
+          sections: Topic.sections
+
+      outputType:
+        properties:
+          actionSubmitId: String
+          sections:
+            type:
+              kind: Table
+              properties:
+                Value: String
+
+    - kind: ConditionGroup
+      id: conditionGroup_CardCancel1
+      conditions:
+        - id: conditionItem_CardCancel1
+          condition: =Topic.actionSubmitId = "cancel"
+          actions:
+            - kind: SendActivity
+              id: sendActivity_CardCancel1
+              activity: No problem, I won't start the update. Nothing was changed. Anything else I can help with?
+
+            - kind: SetVariable
+              id: setVariable_CardCancel1
+              variable: Topic.UpdateStatus
+              value: "=\"Not started: the user cancelled on the starting cards. A message was already shown; do not add another reply.\""
+
+            - kind: CancelAllDialogs
+              id: cancelAllDialogs_suCancel1
+
+    - kind: ConditionGroup
+      id: conditionGroup_suEmpty1
+      conditions:
+        - id: conditionItem_suEmpty1
+          condition: =CountRows(Topic.sections) = 0
+          actions:
+            - kind: SetVariable
+              id: setVariable_suTriesUp1
+              variable: Topic.CardTries
+              value: =Topic.CardTries + 1
+
+            - kind: ConditionGroup
+              id: conditionGroup_suRetry1
+              conditions:
+                - id: conditionItem_suRetry1
+                  condition: =Topic.CardTries <= 2
+                  actions:
+                    - kind: SendActivity
+                      id: sendActivity_suRetry1
+                      activity: I need a selection on the card to continue. Pick at least one section and tap **Next**, or tap **Cancel**. If you have a question first, tap **Cancel**, ask it, and we'll start the update again.
+
+                    - kind: GotoAction
+                      id: gotoAction_suRetry1
+                      actionId: Gy0cdA
+
+              elseActions:
+                - kind: SendActivity
+                  id: sendActivity_suGiveUp1
+                  activity: Let's pause the update for now. Nothing was changed. When you're ready, just tell me which job description you'd like to update.
+
+                - kind: CancelAllDialogs
+                  id: cancelAllDialogs_suGiveUp1
+
+    - kind: SetVariable
+      id: setVariable_suTries2
+      variable: Topic.CardTries
+      value: =0
+
+    - kind: AdaptiveCardPrompt
+      id: RvtHyK
+      interruptionPolicy:
+        allowInterruption: false
+
+      card: |-
+        {
+          "type": "AdaptiveCard",
+          "$schema": "https://adaptivecards.io/schemas/adaptive-card.json",
+          "version": "1.5",
+          "body": [
+            {
+              "type": "TextBlock",
+              "text": "What's the reason for this update?",
+              "weight": "Bolder",
+              "size": "Medium",
+              "wrap": true
+            },
+            {
+              "type": "Input.ChoiceSet",
+              "id": "reasons",
+              "label": "Reasons for this update",
+              "isMultiSelect": true,
+              "style": "expanded",
+              "isRequired": true,
+              "errorMessage": "Pick at least one reason.",
+              "choices": [
+                {
+                  "title": "Upscales",
+                  "value": "Upscales"
+                },
+                {
+                  "title": "Editing Qualifications",
+                  "value": "Editing Qualifications"
+                },
+                {
+                  "title": "Aligning KSAs",
+                  "value": "Aligning KSAs"
+                },
+                {
+                  "title": "Title",
+                  "value": "Title"
+                },
+                {
+                  "title": "Adding/Removing responsibilities",
+                  "value": "Adding/Removing Responsibilities"
+                },
+                {
+                  "title": "Changing reporting relationship/people leadership",
+                  "value": "Changing Reporting Relationship/People Leadership"
+                },
+                {
+                  "title": "Other",
+                  "value": "Other"
+                }
+              ]
+            },
+            {
+              "type": "Input.Text",
+              "id": "otherReason",
+              "placeholder": "If Other, tell us a bit more",
+              "isMultiline": true
+            },
+            {
+              "type": "TextBlock",
+              "text": "What these mean",
+              "weight": "Bolder",
+              "size": "Small",
+              "spacing": "Medium",
+              "wrap": true
+            },
+            {
+              "type": "TextBlock",
+              "text": "**Upscales:** the job has grown in scope or complexity.",
+              "isSubtle": true,
+              "size": "Small",
+              "spacing": "Small",
+              "wrap": true
+            },
+            {
+              "type": "TextBlock",
+              "text": "**Editing Qualifications:** changes to education, experience, or certification requirements.",
+              "isSubtle": true,
+              "size": "Small",
+              "spacing": "None",
+              "wrap": true
+            },
+            {
+              "type": "TextBlock",
+              "text": "**Aligning KSAs:** updating knowledge, skills, and abilities to match the duties.",
+              "isSubtle": true,
+              "size": "Small",
+              "spacing": "None",
+              "wrap": true
+            },
+            {
+              "type": "TextBlock",
+              "text": "**Title:** requesting a review of the job title.",
+              "isSubtle": true,
+              "size": "Small",
+              "spacing": "None",
+              "wrap": true
+            },
+            {
+              "type": "TextBlock",
+              "text": "**Adding/Removing responsibilities:** ongoing duties are added, removed, or changed.",
+              "isSubtle": true,
+              "size": "Small",
+              "spacing": "None",
+              "wrap": true
+            },
+            {
+              "type": "TextBlock",
+              "text": "**Changing reporting relationship/people leadership:** who the role reports to, or whether it supervises others, has changed.",
+              "isSubtle": true,
+              "size": "Small",
+              "spacing": "None",
+              "wrap": true
+            },
+            {
+              "type": "TextBlock",
+              "text": "**Other:** anything else; describe it in the box above.",
+              "isSubtle": true,
+              "size": "Small",
+              "spacing": "None",
+              "wrap": true
+            }
+          ],
+          "actions": [
+            {
+              "type": "Action.Submit",
+              "id": "continue",
+              "title": "Start updating",
+              "style": "positive"
+            },
+            {
+              "type": "Action.Submit",
+              "id": "cancel",
+              "title": "Cancel",
+              "associatedInputs": "none"
+            }
+          ]
+        }
+      output:
+        binding:
+          actionSubmitId: Topic.actionSubmitId
+          otherReason: Topic.otherReason
+          reasons: Topic.reasons
+
+      outputType:
+        properties:
+          actionSubmitId: String
+          otherReason: String
+          reasons:
+            type:
+              kind: Table
+              properties:
+                Value: String
+
+    - kind: ConditionGroup
+      id: conditionGroup_CardCancel2
+      conditions:
+        - id: conditionItem_CardCancel2
+          condition: =Topic.actionSubmitId = "cancel"
+          actions:
+            - kind: SendActivity
+              id: sendActivity_CardCancel2
+              activity: No problem, I won't start the update. Nothing was changed. Anything else I can help with?
+
+            - kind: SetVariable
+              id: setVariable_CardCancel2
+              variable: Topic.UpdateStatus
+              value: "=\"Not started: the user cancelled on the starting cards. A message was already shown; do not add another reply.\""
+
+            - kind: CancelAllDialogs
+              id: cancelAllDialogs_suCancel2
+
+    - kind: ConditionGroup
+      id: conditionGroup_suEmpty2
+      conditions:
+        - id: conditionItem_suEmpty2
+          condition: =CountRows(Topic.reasons) = 0
+          actions:
+            - kind: SetVariable
+              id: setVariable_suTriesUp2
+              variable: Topic.CardTries
+              value: =Topic.CardTries + 1
+
+            - kind: ConditionGroup
+              id: conditionGroup_suRetry2
+              conditions:
+                - id: conditionItem_suRetry2
+                  condition: =Topic.CardTries <= 2
+                  actions:
+                    - kind: SendActivity
+                      id: sendActivity_suRetry2
+                      activity: I need a reason on the card to continue. Pick at least one and tap **Start updating**, or tap **Cancel**. If you have a question first, tap **Cancel**, ask it, and we'll start the update again.
+
+                    - kind: GotoAction
+                      id: gotoAction_suRetry2
+                      actionId: RvtHyK
+
+              elseActions:
+                - kind: SendActivity
+                  id: sendActivity_suGiveUp2
+                  activity: Let's pause the update for now. Nothing was changed. When you're ready, just tell me which job description you'd like to update.
+
+                - kind: CancelAllDialogs
+                  id: cancelAllDialogs_suGiveUp2
+
+    - kind: SetVariable
+      id: setVariable_mYcvRi
+      variable: Global.SelectedSections
+      value: =Concat(Filter(Topic.sections, Value <> "Title"), Value, ",")
+
+    - kind: SetVariable
+      id: setVariable_X3cgrX
+      variable: Global.AddedSections
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_0dd7Oy
+      variable: Global.UpdateReasons
+      value: =Concat(Topic.reasons, Value, ", ")
+
+    - kind: SetVariable
+      id: setVariable_amuriQ
+      variable: Global.OtherReason
+      value: =If(IsBlank(Topic.otherReason), "", Topic.otherReason)
+
+    - kind: SetVariable
+      id: setVariable_rTWe7G
+      variable: Global.TitleReviewRequested
+      value: ="Title" in Concat(Topic.reasons, Value, ",") || "Title" in Concat(Topic.sections, Value, ",")
+
+    - kind: SetVariable
+      id: setVariable_H6tLvE
+      variable: Global.HardStopLog
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_7ujU1p
+      variable: Global.ManagerNotes
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_XVTqvG
+      variable: Global.FollowupsDone
+      value: =false
+
+    - kind: SetVariable
+      id: setVariable_YFO7Bs
+      variable: Global.Changes
+      value: "={Purpose: \"\", PrincipalDuties: \"\", Education: \"\", WorkExperience: \"\", Certifications: \"\", KSA: \"\"}"
+
+    - kind: SetVariable
+      id: setVariable_BbpOnG
+      variable: Global.PendingChecks
+      value: "={PeopleManagement: \"\", SalesNonSales: \"\", RelationshipManager: \"\", NMLS: \"\"}"
+
+    - kind: SetVariable
+      id: setVariable_InitSC
+      variable: Global.SectionChecks
+      value: "={Purpose: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, PrincipalDuties: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, Education: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, WorkExperience: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, Certifications: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}, KSA: {PM: \"\", Sales: \"\", RM: \"\", NMLS: \"\"}}"
+
+    - kind: SetVariable
+      id: setVariable_suInitDrafts
+      variable: Global.SectionDrafts
+      value: "={Purpose: \"\", PrincipalDuties: \"\", Education: \"\", WorkExperience: \"\", Certifications: \"\", KSA: \"\"}"
+
+    - kind: SetVariable
+      id: setVariable_suInitRequests
+      variable: Global.SectionRequests
+      value: "={Purpose: \"\", PrincipalDuties: \"\", Education: \"\", WorkExperience: \"\", Certifications: \"\", KSA: \"\"}"
+
+    - kind: SetVariable
+      id: setVariable_InitBR
+      variable: Global.BusinessReason
+      value: =If(CountRows(Filter(Split(Trim(Global.OtherReason), " "), !IsBlank(Trim(Value)))) >= 5, Trim(Global.OtherReason), "")
+
+    - kind: SetVariable
+      id: setVariable_InitPT
+      variable: Global.ProposedTitle
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_InitTJ
+      variable: Global.TitleJustification
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_FyUV1f
+      variable: Global.UpdateInProgress
+      value: =true
+
+    - kind: SetVariable
+      id: setVariable_ak1vOx
+      variable: Topic.SectionList
+      value: |-
+        =Concat(
+          Split(Global.SelectedSections, ","),
+          Switch(Value,
+            "Purpose", "Purpose",
+            "PrincipalDuties", "Principal Duties",
+            "Education", "Education",
+            "WorkExperience", "Work Experience",
+            "Certifications", "Certifications",
+            "KSA", "KSAs",
+            Value),
+          ", "
+        )
+
+    - kind: SetVariable
+      id: setVariable_pUCJeL
+      variable: Topic.IntroText
+      value: |-
+        =If(
+          IsBlank(Global.SelectedSections),
+          "Got it, I've noted a title review for " & Global.OriginalJD.Title &
+            ". Title reviews are submitted along with job description changes, so which section would you like to update first?",
+          "Got it, let's update " & Global.OriginalJD.Title & ". We'll work through: " & Topic.SectionList &
+            If(Global.TitleReviewRequested, ", and I'll include a title review when you submit", "") &
+            ". You can ask questions or add sections anytime."
+        )
+
+    - kind: SetVariable
+      id: setVariable_Iu2r0Q
+      variable: Topic.UpdateStatus
+      value: |-
+        ="Update started for " & Global.OriginalJD.Title & ". Cards completed. " &
+        If(
+          IsBlank(Global.SelectedSections),
+          "No sections selected yet; a title review was requested. Next step: ask which section the user wants to update first.",
+          "Sections selected: " & Topic.SectionList & ". Reasons: " & Global.UpdateReasons & ". The first section (" & First(Split(Topic.SectionList, ", ")).Value & ") was ALREADY shown to the user; do not show it again. Next step: ask what they would like to change in it."
+        )
+
+    - kind: SendActivity
+      id: sendActivity_MsxENL
+      activity: "{Topic.IntroText}"
+
+    - kind: ConditionGroup
+      id: conditionGroup_ShowFirst
+      conditions:
+        - id: conditionItem_ShowFirst
+          condition: =!IsBlank(Global.SelectedSections)
+          actions:
+            - kind: BeginDialog
+              id: beginDialog_ShowFirst
+              input:
+                binding:
+                  SectionName: =First(Split(Global.SelectedSections, ",")).Value
+
+              dialog: cr87b_JOBJARVIS.topic.ShowJDSection
+              output:
+                binding:
+                  SectionShown: Topic.SectionShown
+                  VersionShown: Topic.VersionShown
+
+    - kind: EndDialog
+      id: iSc2yN
+
+inputType:
+  properties:
+    CurrentJDJson:
+      displayName: CurrentJDJson
+      description: Not used. Leave blank. Never ask the user for this value.
+      type: String
+
+    JobCode:
+      displayName: JobCode
+      description: The exact jobCode from the specific JOB DESCRIPTION SEARCHER result selected by the user, or from the tool's clear winning result. Pass it exactly as returned by the tool. It must correspond to JobTitle. Never ask the user for the job code and never display it.
+      type: String
+
+    JobDescriptionAlreadyShown:
+      displayName: JobDescriptionAlreadyShown
+      description: Not used. Leave blank. Never ask the user for this value.
+      type: Boolean
+
+    JobTitle:
+      displayName: JobTitle
+      description: The exact jobTitle from the same JOB DESCRIPTION SEARCHER result as JobCode. If the tool returned multiple matches, use the result explicitly selected by the user. Do not infer, rewrite, or normalize the title.
+      type: String
+
+    RequestedField:
+      displayName: RequestedField
+      description: Not used. Leave blank. Never ask the user for this value.
+      type: String
+
+    varUpdateActive:
+      displayName: varUpdateActive
+      description: Not used. Leave blank.
+      type: Boolean
+
+outputType:
+  properties:
+    UpdateStatus:
+      displayName: UpdateStatus
+      description: Result of starting the update. If it starts with "Update started", the cards are ALREADY COMPLETED and the first selected section was ALREADY SHOWN; never ask for the cards again and never re-show that section; just ask what they want to change in it (or, if no sections were selected, which section to start with). If it starts with "Not started", a message was already shown; do not add another reply.
+      type: String
