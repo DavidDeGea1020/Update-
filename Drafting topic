@@ -1,0 +1,444 @@
+kind: AdaptiveDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: SectionName
+    description: "Section key, exactly one of: Purpose, PrincipalDuties, Education, WorkExperience, Certifications, KSA. Map the user's wording to the closest key (duties → PrincipalDuties, skills → KSA, experience → WorkExperience)."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: ChangeRequest
+    description: "What the manager wants changed in this section, in their own words, complete and up to date: include earlier details they gave for this section, not only the newest message. Leave empty when they are only adjusting the draft already on screen."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: RevisionRequest
+    description: "Only when a draft for this section is already on screen: the manager's requested changes to that draft, in their words (for example: make the new duty domestic only, put back duty 7). Leave empty for a new draft."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+modelDescription: "Drafts the updated text for one section of the job description being updated, from the manager's own description of the change, and shows the draft with changes marked. Call it whenever the manager describes a change to a section (ChangeRequest) or asks to adjust the draft on screen (RevisionRequest). Never write or show section drafts yourself; this topic does it."
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent: {}
+  actions:
+    - kind: ConditionGroup
+      id: conditionGroup_dsGuard
+      conditions:
+        - id: conditionItem_dsNoUpdate
+          condition: =Global.UpdateInProgress <> true
+          actions:
+            - kind: SetVariable
+              id: setVariable_dsStatusNoUpdate
+              variable: Topic.DraftStatus
+              value: ="NotInUpdate"
+
+            - kind: EndDialog
+              id: endDialog_dsNoUpdate
+
+        - id: conditionItem_dsBadSection
+          condition: =!(Topic.SectionName in ["Purpose","PrincipalDuties","Education","WorkExperience","Certifications","KSA"])
+          actions:
+            - kind: SetVariable
+              id: setVariable_dsStatusBad
+              variable: Topic.DraftStatus
+              value: ="InvalidSection"
+
+            - kind: EndDialog
+              id: endDialog_dsBadSection
+
+    - kind: SetVariable
+      id: setVariable_dsDisplayName
+      variable: Topic.DisplayName
+      value: |-
+        =Switch(Topic.SectionName,
+          "Purpose", "Purpose",
+          "PrincipalDuties", "Principal Duties and Responsibilities",
+          "Education", "Education Requirements",
+          "WorkExperience", "Work Experience Requirements",
+          "Certifications", "Certifications and Licenses",
+          "KSA", "Knowledge, Skills and Abilities",
+          "")
+
+    - kind: SetVariable
+      id: setVariable_dsSaved
+      variable: Topic.SavedText
+      value: |-
+        =Switch(Topic.SectionName,
+          "Purpose", Global.Changes.Purpose,
+          "PrincipalDuties", Global.Changes.PrincipalDuties,
+          "Education", Global.Changes.Education,
+          "WorkExperience", Global.Changes.WorkExperience,
+          "Certifications", Global.Changes.Certifications,
+          "KSA", Global.Changes.KSA,
+          "")
+
+    - kind: SetVariable
+      id: setVariable_dsOrig
+      variable: Topic.OrigText
+      value: |-
+        =Switch(Topic.SectionName,
+          "Purpose", Global.OriginalJD.Purpose,
+          "PrincipalDuties", Global.OriginalJD.PrincipalDuties,
+          "Education", Global.OriginalJD.Education,
+          "WorkExperience", Global.OriginalJD.WorkExperience,
+          "Certifications", Global.OriginalJD.Certifications,
+          "KSA", Global.OriginalJD.KSA,
+          "")
+
+    - kind: SetVariable
+      id: setVariable_dsBaseText
+      variable: Topic.BaseText
+      value: =If(IsBlank(Trim(Topic.SavedText)), Topic.OrigText, Topic.SavedText)
+
+    - kind: SetVariable
+      id: setVariable_dsBaseLines
+      variable: Topic.BaseLines
+      value: |-
+        =Filter(
+          ForAll(
+            Split(Substitute(Substitute(Substitute(Substitute(Text(Topic.BaseText), Char(13), ""), "<br />", Char(10)), "<br/>", Char(10)), "<br>", Char(10)), Char(10)),
+            With({t: Trim(Substitute(ThisRecord.Value, "**", ""))}, If(Left(t, 1) in ["•", "-", "*", "·"], Trim(Mid(t, 2)), t))
+          ),
+          !IsBlank(Value)
+        )
+
+    - kind: SetVariable
+      id: setVariable_dsBaseNumbered
+      variable: Topic.BaseNumbered
+      value: |-
+        =Concat(ForAll(Sequence(CountRows(Topic.BaseLines)) As n, n.Value & ". " & Index(Topic.BaseLines, n.Value).Value), Value, Char(10))
+
+    - kind: SetVariable
+      id: setVariable_dsStoredReq
+      variable: Topic.StoredRequest
+      value: |-
+        =Switch(Topic.SectionName,
+          "Purpose", Global.SectionRequests.Purpose,
+          "PrincipalDuties", Global.SectionRequests.PrincipalDuties,
+          "Education", Global.SectionRequests.Education,
+          "WorkExperience", Global.SectionRequests.WorkExperience,
+          "Certifications", Global.SectionRequests.Certifications,
+          "KSA", Global.SectionRequests.KSA,
+          "")
+
+    - kind: SetVariable
+      id: setVariable_dsCurrentDraft
+      variable: Topic.CurrentDraftText
+      value: |-
+        =Switch(Topic.SectionName,
+          "Purpose", Global.SectionDrafts.Purpose,
+          "PrincipalDuties", Global.SectionDrafts.PrincipalDuties,
+          "Education", Global.SectionDrafts.Education,
+          "WorkExperience", Global.SectionDrafts.WorkExperience,
+          "Certifications", Global.SectionDrafts.Certifications,
+          "KSA", Global.SectionDrafts.KSA,
+          "")
+
+    - kind: SetVariable
+      id: setVariable_dsIsRevision
+      variable: Topic.IsRevision
+      value: =!IsBlank(Trim(Topic.CurrentDraftText)) && (!IsBlank(Trim(Topic.RevisionRequest)) || IsBlank(Trim(Topic.ChangeRequest)))
+
+    - kind: SetVariable
+      id: setVariable_dsRequest
+      variable: Topic.Request
+      value: |-
+        =With(
+          {cr: Trim(Topic.ChangeRequest), st: Trim(Topic.StoredRequest), rr: Trim(Topic.RevisionRequest)},
+          If(!IsBlank(cr), cr, !IsBlank(st), st, rr)
+        )
+
+    - kind: ConditionGroup
+      id: conditionGroup_dsNoRequest
+      conditions:
+        - id: conditionItem_dsNoRequest
+          condition: =IsBlank(Topic.Request) && !Topic.IsRevision
+          actions:
+            - kind: SetVariable
+              id: setVariable_dsStatusNoReq
+              variable: Topic.DraftStatus
+              value: ="NeedsRequest"
+
+            - kind: EndDialog
+              id: endDialog_dsNoRequest
+
+    - kind: SetVariable
+      id: setVariable_dsSaveRequest
+      variable: Global.SectionRequests
+      value: |-
+        ={
+          Purpose: If(Topic.SectionName = "Purpose", Topic.Request, Global.SectionRequests.Purpose),
+          PrincipalDuties: If(Topic.SectionName = "PrincipalDuties", Topic.Request, Global.SectionRequests.PrincipalDuties),
+          Education: If(Topic.SectionName = "Education", Topic.Request, Global.SectionRequests.Education),
+          WorkExperience: If(Topic.SectionName = "WorkExperience", Topic.Request, Global.SectionRequests.WorkExperience),
+          Certifications: If(Topic.SectionName = "Certifications", Topic.Request, Global.SectionRequests.Certifications),
+          KSA: If(Topic.SectionName = "KSA", Topic.Request, Global.SectionRequests.KSA)
+        }
+
+    - kind: SetVariable
+      id: setVariable_dsSectionJSON
+      variable: Topic.SectionJSONText
+      value: |-
+        =JSON(
+          {
+            section_key: Topic.SectionName,
+            section_name: Topic.DisplayName,
+            base_version: If(IsBlank(Trim(Topic.SavedText)), "original", "saved"),
+            base_lines: Topic.BaseNumbered,
+            original_text: Topic.OrigText
+          }
+        )
+
+    - kind: SetVariable
+      id: setVariable_dsJobJSON
+      variable: Topic.JobJSONText
+      value: |-
+        =JSON(
+          {
+            title: Global.OriginalJD.Title,
+            full_jd: Global.OriginalJDText,
+            other_saved_changes: With(
+              {
+                t: Table(
+                  {S: "Purpose", T: Global.Changes.Purpose},
+                  {S: "Principal Duties", T: Global.Changes.PrincipalDuties},
+                  {S: "Education", T: Global.Changes.Education},
+                  {S: "Work Experience", T: Global.Changes.WorkExperience},
+                  {S: "Certifications", T: Global.Changes.Certifications},
+                  {S: "KSAs", T: Global.Changes.KSA}
+                )
+              },
+              If(
+                CountRows(Filter(t, !IsBlank(T) && S <> Topic.DisplayName)) = 0,
+                "None",
+                Concat(Filter(t, !IsBlank(T) && S <> Topic.DisplayName), S & ": " & T, Char(10) & Char(10))
+              )
+            ),
+            related_levels: If(IsBlank(Global.RelatedLevels), "None", Global.RelatedLevels),
+            update_reasons: Global.UpdateReasons & If(IsBlank(Global.OtherReason), "", " (Other: " & Global.OtherReason & ")"),
+            business_reason: Global.BusinessReason
+          }
+        )
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_dsDraft
+      input:
+        binding:
+          SectionJSON: =Topic.SectionJSONText
+          JobJSON: =Topic.JobJSONText
+          ChangeRequest: =If(IsBlank(Topic.Request), "(none)", Topic.Request)
+          CurrentDraft: =If(Topic.IsRevision, Topic.CurrentDraftText, "(none)")
+          RevisionRequest: =If(Topic.IsRevision && !IsBlank(Trim(Topic.RevisionRequest)), Topic.RevisionRequest, "(none)")
+
+      output:
+        binding:
+          predictionOutput: Topic.DraftResult
+
+      aIModelId: PASTE_DRAFT_SECTION_PROMPT_ID
+
+    - kind: SetVariable
+      id: setVariable_dsParse
+      variable: Topic.D
+      value: =ParseJSON(Topic.DraftResult.text)
+
+    - kind: SetVariable
+      id: setVariable_dsStatusText
+      variable: Topic.Status
+      value: =Lower(Trim(Text(Topic.D.status)))
+
+    - kind: SetVariable
+      id: setVariable_dsQuestion
+      variable: Topic.DraftQuestion
+      value: =IfError(Text(First(Table(Topic.D.questions_for_manager)).Value.text), "")
+
+    - kind: SetVariable
+      id: setVariable_dsReview
+      variable: Topic.DraftReview
+      value: =Topic.DraftResult.text
+
+    - kind: ConditionGroup
+      id: conditionGroup_dsNeedsDetail
+      conditions:
+        - id: conditionItem_dsNeedsDetail
+          condition: =Topic.Status = "needs_detail"
+          actions:
+            - kind: SetVariable
+              id: setVariable_dsStatusNeeds
+              variable: Topic.DraftStatus
+              value: ="NeedsDetail"
+
+            - kind: EndDialog
+              id: endDialog_dsNeedsDetail
+
+    - kind: SetVariable
+      id: setVariable_dsLines
+      variable: Topic.Lines
+      value: |-
+        =ForAll(
+          Table(Topic.D.lines) As L,
+          With(
+            {
+              n: IfError(Value(Text(L.Value.num)), 0),
+              s: Lower(Trim(Text(L.Value.status))),
+              x: Trim(Text(L.Value.text))
+            },
+            {
+              Num: n,
+              St: s,
+              Tx: If(s = "unchanged" && n >= 1 && n <= CountRows(Topic.BaseLines), Index(Topic.BaseLines, n).Value, x)
+            }
+          )
+        )
+
+    - kind: SetVariable
+      id: setVariable_dsFinal
+      variable: Topic.FinalText
+      value: |-
+        =Concat(
+          Filter(Topic.Lines, St <> "removed"),
+          If(Topic.SectionName in ["PrincipalDuties", "KSA"], "- ", "") & Tx,
+          Char(10)
+        )
+
+    - kind: SetVariable
+      id: setVariable_dsStore
+      variable: Topic.DraftStore
+      value: |-
+        =JSON(
+          {
+            status: Topic.Status,
+            lines: ForAll(Topic.Lines, {num: If(Num = 0, "", Text(Num)), status: St, text: Tx}),
+            change_summary: Text(Topic.D.change_summary),
+            final_text: Topic.FinalText,
+            hr_flags: ForAll(Table(Topic.D.hr_flags), {text: Text(ThisRecord.Value.text)})
+          }
+        )
+
+    - kind: SetVariable
+      id: setVariable_dsSaveDraft
+      variable: Global.SectionDrafts
+      value: |-
+        ={
+          Purpose: If(Topic.SectionName = "Purpose", Topic.DraftStore, Global.SectionDrafts.Purpose),
+          PrincipalDuties: If(Topic.SectionName = "PrincipalDuties", Topic.DraftStore, Global.SectionDrafts.PrincipalDuties),
+          Education: If(Topic.SectionName = "Education", Topic.DraftStore, Global.SectionDrafts.Education),
+          WorkExperience: If(Topic.SectionName = "WorkExperience", Topic.DraftStore, Global.SectionDrafts.WorkExperience),
+          Certifications: If(Topic.SectionName = "Certifications", Topic.DraftStore, Global.SectionDrafts.Certifications),
+          KSA: If(Topic.SectionName = "KSA", Topic.DraftStore, Global.SectionDrafts.KSA)
+        }
+
+    - kind: SetVariable
+      id: setVariable_dsBody
+      variable: Topic.Body
+      value: |-
+        =With(
+          {
+            listLike: Topic.SectionName in ["PrincipalDuties", "KSA"],
+            unit: If(Topic.SectionName = "KSA", "KSA", "Duty"),
+            unitLower: If(Topic.SectionName = "KSA", "KSA", "duty"),
+            units: If(Topic.SectionName = "KSA", "KSAs", "duties"),
+            changed: Filter(Topic.Lines, St <> "unchanged"),
+            same: CountRows(Filter(Topic.Lines, St = "unchanged")),
+            removed: Filter(Topic.Lines, St = "removed")
+          },
+          If(
+            listLike,
+            If(
+              CountRows(changed) = 0,
+              "No changes to the " & units & ".",
+              Concat(
+                changed,
+                Switch(
+                  St,
+                  "reworded", unit & " " & Num & " (reworded): **" & Tx & "**",
+                  "new", "New: **" & Tx & "**",
+                  "removed", "Removing " & unitLower & " " & Num & ": " & Tx,
+                  Tx
+                ),
+                Char(10) & Char(10)
+              ) & Char(10) & Char(10) & "_" & same & " " & If(same = 1, unitLower, units) & " unchanged._"
+            ),
+            Concat(Filter(Topic.Lines, St <> "removed"), If(St = "unchanged", Tx, "**" & Tx & "**"), Char(10) & Char(10)) &
+            If(CountRows(removed) > 0, Char(10) & Char(10) & Concat(removed, "Removed: " & Tx, Char(10) & Char(10)), "")
+          )
+        )
+
+    - kind: SetVariable
+      id: setVariable_dsNotes
+      variable: Topic.NotesText
+      value: =Concat(Table(Topic.D.notes_for_manager), "- " & Text(ThisRecord.Value.text), Char(10))
+
+    - kind: SetVariable
+      id: setVariable_dsHeader
+      variable: Topic.Header
+      value: |-
+        =If(
+          Topic.Status = "unchanged", "Here's the current draft for **" & Topic.DisplayName & "**:",
+          Topic.IsRevision, "Here's the updated draft for **" & Topic.DisplayName & "**:",
+          "Here's a draft for **" & Topic.DisplayName & "**" & If(IsBlank(Trim(Topic.SavedText)), "", ", built on your saved version") & ":"
+        )
+
+    - kind: SetVariable
+      id: setVariable_dsMessage
+      variable: Topic.Message
+      value: |-
+        =Topic.Header & Char(10) & Char(10) & Topic.Body &
+        If(IsBlank(Trim(Topic.NotesText)), "", Char(10) & Char(10) & "**Notes**" & Char(10) & Char(10) & Topic.NotesText)
+
+    - kind: SendActivity
+      id: sendActivity_dsShow
+      activity:
+        text:
+          - "{Topic.Message}"
+
+    - kind: SetVariable
+      id: setVariable_dsFinalOut
+      variable: Topic.DraftFinalText
+      value: =Topic.FinalText
+
+    - kind: SetVariable
+      id: setVariable_dsStatusDone
+      variable: Topic.DraftStatus
+      value: =If(Topic.Status = "unchanged", "Unchanged", Topic.IsRevision, "Revised", "Drafted")
+
+inputType:
+  properties:
+    ChangeRequest:
+      displayName: ChangeRequest
+      description: "What the manager wants changed in this section, in their own words, complete and up to date: include earlier details they gave for this section, not only the newest message. Leave empty when they are only adjusting the draft already on screen."
+      type: String
+
+    RevisionRequest:
+      displayName: RevisionRequest
+      description: "Only when a draft for this section is already on screen: the manager's requested changes to that draft, in their words (for example: make the new duty domestic only, put back duty 7). Leave empty for a new draft."
+      type: String
+
+    SectionName:
+      displayName: SectionName
+      description: "Section key, exactly one of: Purpose, PrincipalDuties, Education, WorkExperience, Certifications, KSA. Map the user's wording to the closest key (duties → PrincipalDuties, skills → KSA, experience → WorkExperience)."
+      type: String
+
+outputType:
+  properties:
+    DraftStatus:
+      displayName: DraftStatus
+      description: "Drafted, Revised, or Unchanged: the draft and its notes are already on screen; never repeat, re-show, or paraphrase them. Ask exactly one short question: DraftQuestion if it is not empty, otherwise whether the draft looks right or what they would change. When the manager confirms, call Save Section Change with SectionName and ProposedText set to DraftFinalText exactly. For changes to the draft, call this topic again with RevisionRequest. NeedsDetail: no draft was shown; ask DraftQuestion in your own words, then call this topic again with the full ChangeRequest including their answer. NeedsRequest: ask what they would like to change in this section. InvalidSection: only Purpose, Principal Duties, Education, Work Experience, Certifications, and KSAs can be edited. NotInUpdate: no update is in progress."
+      type: String
+
+    DraftQuestion:
+      displayName: DraftQuestion
+      description: "The drafter's first question for the manager, or empty."
+      type: String
+
+    DraftFinalText:
+      displayName: DraftFinalText
+      description: "The complete final text of the drafted section. When the manager confirms, pass it exactly, unchanged, as ProposedText to Save Section Change. Never show it."
+      type: String
+
+    DraftReview:
+      displayName: DraftReview
+      description: "JSON from the drafting step, for reference only. Its HR flags are for HR; never show or read them to the manager."
+      type: String
