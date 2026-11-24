@@ -1,0 +1,498 @@
+kind: AdaptiveDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: IndirectConfirmations
+    description: "The user's answers to the confirming questions about the fields listed in PendingChecksSummary, e.g. \"Relationship Manager: yes, manages ~40 clients.\" Use \"None\" if PendingChecksSummary was blank. Never ask the user for this directly."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: ProposedTitle
+    description: The job title the user proposed, only if a title review was requested and the user has given one in this conversation. Otherwise leave empty.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: TitleJustification
+    name: TitleJustification
+    description: The user's reason the current title no longer fits, only if a title review was requested and the user has given one in this conversation. Otherwise leave empty.
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: BusinessReason
+    description: "The business reason the user confirmed in this conversation: 2 to 5 plain sentences on why the job needs these changes, passed exactly as confirmed. Never the Reason for Update card choice alone, and never a reason you wrote that the user didn't confirm. If none has been confirmed, leave it empty."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+modelDescription: Builds the final review summary of the job description update and lets the user submit it to HR. Use when the user says they are done updating, are ready to submit, or wants to see a summary of their changes. Before calling, ask the user the confirming questions for any potential indirect impacts. The topic asks for the proposed title and justification itself if a title review was requested and they are missing.
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent: {}
+  actions:
+    - kind: ConditionGroup
+      id: conditionGroup_ciAOzJ
+      conditions:
+        - id: conditionItem_F6jx2O
+          condition: =IsBlank(Global.Changes.Purpose) && IsBlank(Global.Changes.PrincipalDuties) && IsBlank(Global.Changes.Education) && IsBlank(Global.Changes.WorkExperience) && IsBlank(Global.Changes.Certifications) && IsBlank(Global.Changes.KSA)
+          actions:
+            - kind: SendActivity
+              id: sendActivity_zm7v5B
+              activity: There aren't any saved changes yet, so there's nothing to submit. Title reviews also need at least one job description change to go with them. Which section would you like to start with?
+
+            - kind: CancelAllDialogs
+              id: cancelAllDialogs_rvNoChanges
+
+      elseActions:
+        - kind: SetVariable
+          id: setVariable_kFwdM2
+          variable: Topic.ReasonWords
+          value: =CountRows(Filter(Split(Trim(Topic.BusinessReason), " "), !IsBlank(Trim(Value))))
+
+        - kind: ConditionGroup
+          id: conditionGroup_qP8dHD
+          conditions:
+            - id: conditionItem_yeeTC8
+              condition: =Topic.ReasonWords < 6
+              actions:
+                - kind: SendActivity
+                  id: sendActivity_wKB3HV
+                  activity: "Before I send this for review, HR needs the business reason behind these changes. You picked **{Global.UpdateReasons}**. In a sentence or two, what's driving the update? For example: new responsibilities, a team change, or growth in the role's scope."
+
+                - kind: CancelAllDialogs
+                  id: cancelAllDialogs_rvNoReason
+
+        - kind: SetVariable
+          id: setVariable_rvTitleCarry
+          variable: Topic.ProposedTitle
+          value: =If(IsBlank(Trim(Topic.ProposedTitle)) || Upper(Trim(Topic.ProposedTitle)) = "N/A", Global.ProposedTitle, Topic.ProposedTitle)
+
+        - kind: SetVariable
+          id: setVariable_rvJustCarry
+          variable: Topic.TitleJustification
+          value: =If(IsBlank(Trim(Topic.TitleJustification)) || Upper(Trim(Topic.TitleJustification)) = "N/A", Global.TitleJustification, Topic.TitleJustification)
+
+        - kind: ConditionGroup
+          id: conditionGroup_vef2Hx
+          conditions:
+            - id: conditionItem_Slokxl
+              condition: =Global.TitleReviewRequested && IsBlank(Trim(Topic.ProposedTitle))
+              actions:
+                - kind: Question
+                  id: question_rUbAwX
+                  interruptionPolicy:
+                    allowInterruption: true
+
+                  variable: Topic.ProposedTitle
+                  prompt: You asked for a title review. What title would you propose for this role?
+                  entity:
+                    kind: StringPrebuiltEntity
+                    sensitivityLevel: None
+
+        - kind: ConditionGroup
+          id: conditionGroup_LqtA6j
+          conditions:
+            - id: conditionItem_ZqmYdy
+              condition: =Global.TitleReviewRequested && IsBlank(Trim(Topic.TitleJustification))
+              actions:
+                - kind: Question
+                  id: question_Mtlv1Q
+                  interruptionPolicy:
+                    allowInterruption: true
+
+                  variable: Topic.TitleJustification
+                  prompt: "Why doesn't **{Global.OriginalJD.Title}** fit the role anymore? A few sentences on what changed in the work will help HR review the title."
+                  entity:
+                    kind: StringPrebuiltEntity
+                    sensitivityLevel: None
+
+        - kind: SetVariable
+          id: setVariable_rvSaveTitle
+          variable: Global.ProposedTitle
+          value: =If(Global.TitleReviewRequested, Topic.ProposedTitle, Global.ProposedTitle)
+
+        - kind: SetVariable
+          id: setVariable_rvSaveJust
+          variable: Global.TitleJustification
+          value: =If(Global.TitleReviewRequested, Topic.TitleJustification, Global.TitleJustification)
+
+    - kind: SetVariable
+      id: setVariable_I9WFKq
+      variable: Topic.ChangesText
+      value: |-
+        =Concat(
+          Filter(
+            Table(
+              {S: "Purpose", O: Global.OriginalJD.Purpose, N: Global.Changes.Purpose},
+              {S: "PrincipalDuties", O: Global.OriginalJD.PrincipalDuties, N: Global.Changes.PrincipalDuties},
+              {S: "Education", O: Global.OriginalJD.Education, N: Global.Changes.Education},
+              {S: "WorkExperience", O: Global.OriginalJD.WorkExperience, N: Global.Changes.WorkExperience},
+              {S: "Certifications", O: Global.OriginalJD.Certifications, N: Global.Changes.Certifications},
+              {S: "KSA", O: Global.OriginalJD.KSA, N: Global.Changes.KSA}
+            ),
+            !IsBlank(N)
+          ),
+          "### " & S & If(S in Global.AddedSections, " (added during update)", "") & Char(10) &
+          "ORIGINAL:" & Char(10) & O & Char(10) &
+          "PROPOSED:" & Char(10) & N,
+          Char(10) & Char(10)
+        )
+
+    - kind: SetVariable
+      id: setVariable_xrXw2V
+      variable: Topic.SectionsChanged
+      value: |-
+        =Concat(
+          Filter(
+            Table(
+              {D: "Purpose", N: Global.Changes.Purpose},
+              {D: "Principal Duties", N: Global.Changes.PrincipalDuties},
+              {D: "Education", N: Global.Changes.Education},
+              {D: "Work Experience", N: Global.Changes.WorkExperience},
+              {D: "Certifications", N: Global.Changes.Certifications},
+              {D: "KSAs", N: Global.Changes.KSA}
+            ),
+            !IsBlank(N)
+          ),
+          D, ", "
+        )
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_xhhPtt
+      input:
+        binding:
+          ChangesText: =Topic.ChangesText
+          CurrentTitle: =Global.OriginalJD.Title
+          FollowupsDone: =If(Global.FollowupsDone, "true", "false")
+          IndirectConfirmations: =Topic.IndirectConfirmations
+          IndirectEvidence: |-
+            =With(
+                {
+                    Items: Filter(
+                        Table(
+                            {F: "People Management", E: Global.PendingChecks.PeopleManagement},
+                            {F: "Sales/Non-Sales", E: Global.PendingChecks.SalesNonSales},
+                            {F: "Relationship Manager", E: Global.PendingChecks.RelationshipManager},
+                            {F: "NMLS Required", E: Global.PendingChecks.NMLS}
+                        ),
+                        !IsBlank(E)
+                    )
+                },
+                If(
+                    CountRows(Items) = 0,
+                    "None",
+                    Concat(Items, F & ": " & E, Char(10))
+                )
+            )
+          ManagerNotes: =If(IsBlank(Global.ManagerNotes), "None", Global.ManagerNotes)
+          OriginalJD: =Global.OriginalJDText
+          ProposedTitle: =If(Global.TitleReviewRequested, Topic.ProposedTitle, "N/A")
+          RelatedLevels: =Global.RelatedLevels
+          TitleJustification: =If(Global.TitleReviewRequested, Topic.TitleJustification, "N/A")
+          TitleReviewRequested: =Text(Global.TitleReviewRequested)
+          UpdateReasons: |-
+            =Global.UpdateReasons &
+            If(
+                IsBlank(Global.OtherReason),
+                "",
+                " (Other: " & Global.OtherReason & ")"
+            ) &
+            Char(10) &
+            "Business reason from the manager: " &
+            Topic.BusinessReason
+
+      output:
+        binding:
+          predictionOutput: Topic.FinalNew
+
+      aIModelId: 872f2a98-acbb-4b81-9b09-ff8637563641
+
+    - kind: SetVariable
+      id: setVariable_JNQNtl
+      variable: Topic.F
+      value: =ParseJSON(Topic.FinalNew.text)
+
+    - kind: ConditionGroup
+      id: conditionGroup_RCmAZj
+      conditions:
+        - id: conditionItem_3kxSMe
+          condition: =Global.TitleReviewRequested && !Boolean(Topic.F.title_supported) && Topic.TitleChecked <> true
+          actions:
+            - kind: SetVariable
+              id: setVariable_rvTitleChecked
+              variable: Topic.TitleChecked
+              value: =true
+
+            - kind: SetVariable
+              id: setVariable_Erh3N9
+              variable: Topic.TitleFeedback
+              value: |-
+                =With(
+                    {a: Trim(Text(Topic.F.title_support_assessment))},
+                    "**Title review: " & Topic.ProposedTitle & "**" & Char(10) & Char(10) &
+                    If(
+                        IsBlank(a) || IsMatch(Lower(a), "grade|exempt|flsa|salary|hourly|job code|overtime|compensation", MatchOptions.Contains),
+                        "The changes so far may not fully support the proposed title. HR reviews a title against the work described, mainly the Purpose and Principal Duties.",
+                        a
+                    ) &
+                    Char(10) & Char(10) &
+                    "HR makes the final title decision."
+                )
+
+            - kind: SendActivity
+              id: sendActivity_hQGlvg
+              activity: "{Topic.TitleFeedback}"
+
+            - kind: Question
+              id: question_0G1Mot
+              interruptionPolicy:
+                allowInterruption: true
+
+              variable: init:Topic.TitleDecision
+              prompt: How would you like to proceed?
+              entity:
+                kind: EmbeddedEntity
+                definition:
+                  kind: ClosedListEntity
+                  items:
+                    - id: Make more changes
+                      displayName: Make more changes
+                      synonyms:
+                        - go back
+                        - update sections
+                        - add more
+                        - edit
+
+                    - id: Submit without title review
+                      displayName: Submit without title review
+                      synonyms:
+                        - just the changes
+                        - submit anyway
+                        - skip title
+                        - drop the title
+
+                    - id: Cancel this update
+                      displayName: Cancel this update
+                      synonyms:
+                        - stop
+                        - discard
+                        - cancel
+
+            - kind: ConditionGroup
+              id: conditionGroup_975wCx
+              conditions:
+                - id: conditionItem_WDP8Lf
+                  condition: =Topic.TitleDecision = 'cr87b_JOBJARVIS.topic.ReviewandSubmitJDUpdate.main.question_0G1Mot'.'Make more changes'
+                  actions:
+                    - kind: SendActivity
+                      id: sendActivity_mZtnYk
+                      activity: Sure, which section would you like to update?
+
+                    - kind: CancelAllDialogs
+                      id: cancelAllDialogs_rvMoreChanges
+
+                - id: conditionItem_Kr2sia
+                  condition: =Topic.TitleDecision = 'cr87b_JOBJARVIS.topic.ReviewandSubmitJDUpdate.main.question_0G1Mot'.'Submit without title review'
+                  actions:
+                    - kind: SetVariable
+                      id: setVariable_nVJ4Wb
+                      variable: Global.TitleReviewRequested
+                      value: =false
+
+                - id: conditionItem_qBWNEI
+                  condition: =Topic.TitleDecision = 'cr87b_JOBJARVIS.topic.ReviewandSubmitJDUpdate.main.question_0G1Mot'.'Cancel this update'
+                  actions:
+                    - kind: BeginDialog
+                      id: WK5uqi
+                      input:
+                        binding:
+                          Mode: ="Cancel"
+
+                      dialog: cr87b_JOBJARVIS.topic.CancelorSwitchJDUpdate
+                      output:
+                        binding:
+                          SwitchStatus: Topic.SwitchStatus
+
+    - kind: SetVariable
+      id: setVariable_bqDPys
+      variable: Topic.SummaryText
+      value: |-
+        ="**Job:** " & Global.OriginalJD.Title & Char(10) & Char(10) &
+        "**Sections changed:** " & Topic.SectionsChanged & Char(10) & Char(10) &
+        "**Reasons:** " & Global.UpdateReasons &
+          If(IsBlank(Global.OtherReason), "", " (" & Global.OtherReason & ")") & Char(10) & Char(10) &
+        "**Business reason:** " & Topic.BusinessReason & Char(10) & Char(10) &
+        If(IsBlank(Text(Topic.F.change_summary)), "",
+          "**Summary of changes:**" & Char(10) & Text(Topic.F.change_summary) & Char(10) & Char(10)) &
+        If(IsBlank(Global.HardStopLog), "",
+          "**Noted for HR (not changed):**" & Char(10) & Global.HardStopLog & Char(10) & Char(10)) &
+        If(Global.TitleReviewRequested,
+          "**Title review:** Proposed """ & Topic.ProposedTitle & """. " & Topic.TitleJustification & Char(10) & Char(10), "") &
+        If(Boolean(Topic.F.level_match), "**One thing to consider:** " & Text(Topic.F.level_recommendation), "")
+
+    - kind: SetVariable
+      id: setVariable_UzwxZJ
+      variable: Topic.ReviewContext
+      value: |-
+        ="Job: " & Global.OriginalJD.Title & Char(10) &
+        "Sections changed: " & Topic.SectionsChanged & Char(10) &
+        "Reasons: " & Global.UpdateReasons &
+          If(IsBlank(Global.OtherReason), "", " (" & Global.OtherReason & ")") & Char(10) &
+          "Business reason: " & Topic.BusinessReason & Char(10) &
+        "Change summary:" & Char(10) & Text(Topic.F.change_summary) & Char(10) &
+        "Indirect impacts confirmed by the manager: " &
+          If(IsBlank(Topic.IndirectConfirmations), "None", Topic.IndirectConfirmations) & Char(10) &
+        "Requests that can't be changed here (noted for HR): " &
+          If(IsBlank(Global.HardStopLog), "None", Global.HardStopLog) & Char(10) &
+        "Level overlap: " &
+          If(Coalesce(Boolean(Topic.F.level_match), false),
+            Text(Topic.F.matched_level_title) & ". " & Text(Topic.F.level_recommendation),
+            "None found") & Char(10) &
+        "Title review: " &
+          If(Global.TitleReviewRequested,
+            "Requested. Proposed title: " & Topic.ProposedTitle & ". Reason: " & Topic.TitleJustification,
+            "Not requested")
+
+    - kind: SetVariable
+      id: setVariable_7ltU0O
+      variable: Topic.Followups
+      value: |-
+        =ForAll(
+          Table(Topic.F.followups),
+          {
+            Q: Text(ThisRecord.Value.question),
+            Why: Text(ThisRecord.Value.why),
+            Type: Text(ThisRecord.Value.type)
+          }
+        )
+
+    - kind: SetVariable
+      id: setVariable_cXc9nr
+      variable: Topic.NeedsInfo
+      value: |-
+        =Lower(Text(Topic.F.readiness)) = "needs_info" &&
+        CountRows(Filter(Topic.Followups, !IsBlank(Q))) > 0 &&
+        Global.FollowupsDone <> true
+
+    - kind: ConditionGroup
+      id: conditionGroup_m6oh42
+      conditions:
+        - id: conditionItem_3qvqij
+          condition: =Topic.NeedsInfo = true
+          actions:
+            - kind: SetVariable
+              id: setVariable_HBCe60
+              variable: Global.FollowupsDone
+              value: =true
+
+            - kind: SetVariable
+              id: setVariable_uH204G
+              variable: Topic.FUIndex
+              value: =1
+
+            - kind: SendActivity
+              id: sendActivity_rra2Pu
+              activity: |-
+                {"Before I put this together for submission, " &
+                Switch(
+                  CountRows(Filter(Topic.Followups, !IsBlank(Q))),
+                  1, "one quick question",
+                  2, "two quick questions",
+                  "three quick questions"
+                ) &
+                " so HR can process your request."}
+
+            - kind: SetVariable
+              id: setVariable_knbADa
+              variable: Topic.FUIndex
+              value: =Topic.FUIndex
+
+            - kind: ConditionGroup
+              id: conditionGroup_UgjopM
+              conditions:
+                - id: conditionItem_kXQ9qw
+                  condition: =Topic.FUIndex <= CountRows(Filter(Topic.Followups, !IsBlank(Q)))
+                  actions:
+                    - kind: Question
+                      id: question_9Wel77
+                      interruptionPolicy:
+                        allowInterruption: true
+
+                      alwaysPrompt: true
+                      variable: init:Topic.FUAnswer
+                      prompt: "{Index(Filter(Topic.Followups, !IsBlank(Q)), Topic.FUIndex).Q}"
+                      entity: StringPrebuiltEntity
+
+                    - kind: SetVariable
+                      id: setVariable_HSfXSX
+                      variable: Global.ManagerNotes
+                      value: "=If(IsBlank(Global.ManagerNotes), \"\", Global.ManagerNotes & Char(10)) & \"- \" & Index(Filter(Topic.Followups, !IsBlank(Q)), Topic.FUIndex).Q & \" Answer: \" & Topic.FUAnswer"
+
+                    - kind: SetVariable
+                      id: setVariable_t264IW
+                      variable: Topic.FUIndex
+                      value: =Topic.FUIndex + 1
+
+                    - kind: GotoAction
+                      id: NkahTA
+                      actionId: setVariable_knbADa
+
+            - kind: GotoAction
+              id: iXenhu
+              actionId: invokeAIBuilderModelAction_xhhPtt
+
+    - kind: SendActivity
+      id: sendActivity_Onq8p6
+      activity: |-
+        Here's your update request:<br /><br />
+        {Topic.SummaryText}<br />
+        Ask me about anything here, or pick an option below.
+
+    - kind: BeginDialog
+      id: 2y9vTT
+      input:
+        binding:
+          BusinessReason: =Topic.BusinessReason
+          ChangesText: =Topic.ChangesText
+          FinalJSON: =Topic.FinalNew.text
+          IndirectConfirmations: =Topic.IndirectConfirmations
+          ProposedTitle: =Topic.ProposedTitle
+          ReviewContext: =Topic.ReviewContext
+          SectionsChanged: =Topic.SectionsChanged
+          TitleJustification: =Topic.TitleJustification
+
+      dialog: cr87b_JOBJARVIS.topic.SubmitJDUpdate
+      output:
+        binding:
+          SubmitStatus: Topic.SubmitStatus
+
+    - kind: EndDialog
+      id: BJA80c
+
+inputType:
+  properties:
+    BusinessReason:
+      displayName: BusinessReason
+      description: "The business reason the user confirmed in this conversation: 2 to 5 plain sentences on why the job needs these changes, passed exactly as confirmed. Never the Reason for Update card choice alone, and never a reason you wrote that the user didn't confirm. If none has been confirmed, leave it empty."
+      type: String
+
+    IndirectConfirmations:
+      displayName: IndirectConfirmations
+      description: "The user's answers to the confirming questions about the fields listed in PendingChecksSummary, e.g. \"Relationship Manager: yes, manages ~40 clients.\" Use \"None\" if PendingChecksSummary was blank. Never ask the user for this directly."
+      type: String
+
+    ProposedTitle:
+      displayName: ProposedTitle
+      description: The job title the user proposed, only if a title review was requested and the user has given one in this conversation. Otherwise leave empty.
+      type: String
+
+    TitleJustification:
+      displayName: TitleJustification
+      description: The user's reason the current title no longer fits, only if a title review was requested and the user has given one in this conversation. Otherwise leave empty.
+      type: String
+
+outputType:
+  properties:
+    SubmitStatus:
+      displayName: SubmitStatus
+      description: "\"Submitted\" means the confirmation, reference number, and download link were ALREADY shown to the user. Do not send any additional message, summary, or closing. Wait for the user's next message."
+      type: String
