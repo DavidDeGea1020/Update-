@@ -1,0 +1,169 @@
+kind: AdaptiveDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: SectionName
+    description: "The section key. Must be exactly one of: Purpose, PrincipalDuties, Education, WorkExperience, Certifications, KSA. Map the user's wording to the closest key (e.g., \"duties\" → PrincipalDuties, \"skills\" → KSA, \"experience\" → WorkExperience)."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: true
+
+  - kind: AutomaticTaskInput
+    propertyName: Version
+    description: "Leave empty. Set to Original only when the user explicitly asks to see the original text of a section that already has a saved change."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+modelDescription: "Shows the user one editable section of the job description being updated: the saved version if the section already has a saved change, otherwise the current text. Use at the start of working on a section, or whenever the user asks to see a section during an update."
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent: {}
+  actions:
+    - kind: ConditionGroup
+      id: conditionGroup_of7HWE
+      conditions:
+        - id: conditionItem_EY62CD
+          condition: =!(Topic.SectionName in ["Purpose","PrincipalDuties","Education","WorkExperience","Certifications","KSA"])
+          actions:
+            - kind: SetVariable
+              id: setVariable_FXaVD8
+              variable: Topic.SectionShown
+              value: ="Not an editable section. Only Purpose, Principal Duties, Education, Work Experience, Certifications, and KSAs can be edited."
+
+            - kind: EndDialog
+              id: FpjJwY
+
+      elseActions:
+        - kind: SetVariable
+          id: setVariable_sjSaved
+          variable: Topic.SavedText
+          value: |-
+            =Switch(Topic.SectionName,
+              "Purpose", Global.Changes.Purpose,
+              "PrincipalDuties", Global.Changes.PrincipalDuties,
+              "Education", Global.Changes.Education,
+              "WorkExperience", Global.Changes.WorkExperience,
+              "Certifications", Global.Changes.Certifications,
+              "KSA", Global.Changes.KSA,
+              "")
+
+        - kind: SetVariable
+          id: setVariable_sjUseSaved
+          variable: Topic.UseSaved
+          value: =!IsBlank(Trim(Topic.SavedText)) && Lower(Trim(Topic.Version)) <> "original"
+
+        - kind: SetVariable
+          id: setVariable_sjVersion
+          variable: Topic.VersionShown
+          value: =If(Topic.UseSaved, "Saved", If(IsBlank(Trim(Topic.SavedText)), "Current", "OriginalBeforeSave"))
+
+        - kind: SetVariable
+          id: setVariable_sjSource
+          variable: Topic.SourceText
+          value: |-
+            =If(
+              Topic.UseSaved,
+              Topic.SavedText,
+              Switch(Topic.SectionName,
+                "Purpose", Global.OriginalJD.Purpose,
+                "PrincipalDuties", Global.OriginalJD.PrincipalDuties,
+                "Education", Global.OriginalJD.Education,
+                "WorkExperience", Global.OriginalJD.WorkExperience,
+                "Certifications", Global.OriginalJD.Certifications,
+                "KSA", Global.OriginalJD.KSA,
+                "")
+            )
+
+        - kind: SetVariable
+          id: setVariable_QbGtRw
+          variable: Topic.SectionShown
+          value: =Topic.SourceText
+
+        - kind: SetVariable
+          id: setVariable_EJAm2K
+          variable: Topic.SectionDisplay
+          value: |-
+            =Substitute(
+              Substitute(Substitute(Substitute(Topic.SectionShown, "<br />", Char(10)), "<br/>", Char(10)), "<br>", Char(10)),
+              "•", "- "
+            )
+
+        - kind: SetVariable
+          id: setVariable_A8AAuT
+          variable: Topic.SectionShown
+          value: =Topic.SectionDisplay
+
+        - kind: SetVariable
+          id: setVariable_uin5zi
+          variable: Topic.DisplayName
+          value: |-
+            =Switch(Topic.SectionName,
+              "Purpose", "Purpose",
+              "PrincipalDuties", "Principal Duties and Responsibilities",
+              "Education", "Education Requirements",
+              "WorkExperience", "Work Experience Requirements",
+              "Certifications", "Certifications and Licenses",
+              "KSA", "Knowledge, Skills and Abilities",
+              "")
+
+        - kind: ConditionGroup
+          id: conditionGroup_mDt4as
+          conditions:
+            - id: conditionItem_mFDIBs
+              condition: =Topic.SectionName = "PrincipalDuties"
+              actions:
+                - kind: SetVariable
+                  id: setVariable_xY9MJt
+                  variable: Topic.SectionShown
+                  value: |-
+                    =With({lines: Filter(ForAll(Split(Substitute(Substitute(Substitute(Text(Topic.SourceText), "<br />", Char(10)), "<br/>", Char(10)), "<br>", Char(10)), Char(10)), With({t: Trim(Substitute(ThisRecord.Value, "**", ""))}, If(Left(t, 1) in ["•", "-", "*", "·"], Trim(Mid(t, 2)), t))), !IsBlank(Value))}, Concat(ForAll(Sequence(CountRows(lines)) As n, n.Value & ". " & Index(lines, n.Value).Value), Value, Char(10)))
+
+                - kind: SetVariable
+                  id: setVariable_3R2ac1
+                  variable: Topic.SectionDisplay
+                  value: =Topic.SectionShown
+
+        - kind: SetVariable
+          id: setVariable_sjEmpty
+          variable: Topic.SectionDisplay
+          value: =If(IsBlank(Trim(Topic.SectionDisplay)), "_(This section is currently empty.)_", Topic.SectionDisplay)
+
+        - kind: SetVariable
+          id: setVariable_sjHeading
+          variable: Topic.Heading
+          value: |-
+            =Switch(
+              Topic.VersionShown,
+              "Saved", "Here's your saved **" & Topic.DisplayName & "** (not yet sent to HR):",
+              "OriginalBeforeSave", "Here's the original **" & Topic.DisplayName & "**, before your saved changes:",
+              "Here's the current **" & Topic.DisplayName & "**:"
+            )
+
+        - kind: SendActivity
+          id: sendActivity_f4xZya
+          activity: |-
+            {Topic.Heading}<br /><br />
+            {Topic.SectionDisplay}
+
+inputType:
+  properties:
+    SectionName:
+      displayName: SectionName
+      description: "The section key. Must be exactly one of: Purpose, PrincipalDuties, Education, WorkExperience, Certifications, KSA. Map the user's wording to the closest key (e.g., \"duties\" → PrincipalDuties, \"skills\" → KSA, \"experience\" → WorkExperience)."
+      type: String
+
+    Version:
+      displayName: Version
+      description: "Leave empty. Set to Original only when the user explicitly asks to see the original text of a section that already has a saved change."
+      type: String
+
+outputType:
+  properties:
+    SectionShown:
+      displayName: SectionShown
+      description: The text of the section, already displayed to the user. Do not repeat it.
+      type: String
+
+    VersionShown:
+      displayName: VersionShown
+      description: "Current: the section has no saved change and its current text is on screen. Saved: the section already has a saved change and the saved version is on screen; duty numbers in this view follow the saved list. Draft any further change from this saved text so earlier saved edits are kept, and save the full section again. OriginalBeforeSave: the user asked to see the original; remind them in one short line that their saved version still stands unless they change it."
+      type: String
