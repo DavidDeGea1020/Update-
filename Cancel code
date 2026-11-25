@@ -1,0 +1,14 @@
+    - kind: SetVariable
+      id: setVariable_csTitleReview
+      variable: Global.TitleReview
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_csTitleSnap
+      variable: Global.TitleReviewSnapshot
+      value: =""
+
+    - kind: SetVariable
+      id: setVariable_csDraftFlags
+      variable: Global.DraftFlags
+      value: =""
