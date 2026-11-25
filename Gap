@@ -1,0 +1,6 @@
+When more than one type fits, choose the first that applies in this order:
+1. people_leadership_tier: a Team Leader, Supervisor, Director, or people-managing Manager tier is added, removed, or changed. Treat Manager as a tier only when the role supervises employees (people_management or the duties show it); a Product, Project, Program, Benefits, or similar Manager with no direct reports is not a tier.
+2. different_family: both titles name a family and the families differ, or a non-tier Manager title replaces a family title.
+3. higher_level or lower_level: the level changes. Senior and Lead rank above Level III. Moving to Senior or Lead is higher_level even when the family word is dropped or changed (for example "Specialist II" to "Operations Lead"). Lead is an individual contributor level, not a people-leadership tier.
+4. correction: the title changes but the work has not materially changed.
+Use unclear only when the titles share nothing you can compare.
