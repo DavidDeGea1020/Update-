@@ -1,0 +1,271 @@
+kind: AdaptiveDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: ProposedTitle
+    description: "The new job title the manager proposes, exactly as they wrote it. Fill it only when they state a specific title in this conversation. Leave empty otherwise; never suggest one."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+  - kind: AutomaticTaskInput
+    propertyName: TitleJustification
+    description: "The manager's reason the current title no longer fits, in their own words: what changed in the work. Fill it only when they gave one. Leave empty otherwise."
+    entity: StringPrebuiltEntity
+    shouldPromptUser: false
+
+modelDescription: "Runs the title review during a job description update. Call it whenever the manager proposes a new title or explains why the current title no longer fits (pass what they said), when they propose a different title, and with no inputs to re-check the title after sections change. It adds the title review to the update if needed, saves the title details, and shows the result. Never write your own title assessment."
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent: {}
+  actions:
+    - kind: ConditionGroup
+      id: conditionGroup_utNoUpdate
+      conditions:
+        - id: conditionItem_utNoUpdate
+          condition: =Global.UpdateInProgress <> true
+          actions:
+            - kind: SetVariable
+              id: setVariable_utStatusNoUpdate
+              variable: Topic.TitleStatus
+              value: ="NotInUpdate"
+
+            - kind: EndDialog
+              id: endDialog_utNoUpdate
+
+    - kind: SetVariable
+      id: setVariable_utAdded
+      variable: Topic.TitleAdded
+      value: =If(Global.TitleReviewRequested, "No", "Yes")
+
+    - kind: ConditionGroup
+      id: conditionGroup_utAdd
+      conditions:
+        - id: conditionItem_utAdd
+          condition: =Global.TitleReviewRequested <> true
+          actions:
+            - kind: SetVariable
+              id: setVariable_utRequested
+              variable: Global.TitleReviewRequested
+              value: =true
+
+            - kind: SetVariable
+              id: setVariable_utReasons
+              variable: Global.UpdateReasons
+              value: =If("Title" in Global.UpdateReasons, Global.UpdateReasons, If(IsBlank(Global.UpdateReasons), "Title", Global.UpdateReasons & ", Title"))
+
+    - kind: SetVariable
+      id: setVariable_utSaveTitle
+      variable: Global.ProposedTitle
+      value: =If(IsBlank(Trim(Topic.ProposedTitle)) || Upper(Trim(Topic.ProposedTitle)) = "N/A", Global.ProposedTitle, Trim(Topic.ProposedTitle))
+
+    - kind: SetVariable
+      id: setVariable_utSaveJust
+      variable: Global.TitleJustification
+      value: =If(IsBlank(Trim(Topic.TitleJustification)) || Upper(Trim(Topic.TitleJustification)) = "N/A", Global.TitleJustification, Trim(Topic.TitleJustification))
+
+    - kind: ConditionGroup
+      id: conditionGroup_utMissing
+      conditions:
+        - id: conditionItem_utNeedTitle
+          condition: =IsBlank(Trim(Global.ProposedTitle))
+          actions:
+            - kind: SetVariable
+              id: setVariable_utStatusNeedTitle
+              variable: Topic.TitleStatus
+              value: ="NeedTitle"
+
+            - kind: EndDialog
+              id: endDialog_utNeedTitle
+
+        - id: conditionItem_utNeedJust
+          condition: =IsBlank(Trim(Global.TitleJustification))
+          actions:
+            - kind: SetVariable
+              id: setVariable_utStatusNeedJust
+              variable: Topic.TitleStatus
+              value: ="NeedJustification"
+
+            - kind: EndDialog
+              id: endDialog_utNeedJust
+
+    - kind: SetVariable
+      id: setVariable_utUpdatedJD
+      variable: Topic.UpdatedJD
+      value: |-
+        ="Job Title: " & Global.OriginalJD.Title & Char(10) &
+        "People Management: " & Global.OriginalJD.PeopleManagement & Char(10) &
+        "Sales/Non-Sales: " & Global.OriginalJD.SalesNonSales & Char(10) &
+        "Relationship Manager: " & Global.OriginalJD.RelationshipManager & Char(10) &
+        "NMLS Required: " & Global.OriginalJD.NMLS & Char(10) & Char(10) &
+        "Purpose:" & Char(10) & If(IsBlank(Global.Changes.Purpose), Global.OriginalJD.Purpose, Global.Changes.Purpose) & Char(10) & Char(10) &
+        "Principal Duties and Responsibilities:" & Char(10) & If(IsBlank(Global.Changes.PrincipalDuties), Global.OriginalJD.PrincipalDuties, Global.Changes.PrincipalDuties) & Char(10) & Char(10) &
+        "Education Requirements:" & Char(10) & If(IsBlank(Global.Changes.Education), Global.OriginalJD.Education, Global.Changes.Education) & Char(10) & Char(10) &
+        "Work Experience Requirements:" & Char(10) & If(IsBlank(Global.Changes.WorkExperience), Global.OriginalJD.WorkExperience, Global.Changes.WorkExperience) & Char(10) & Char(10) &
+        "Certifications and Licenses:" & Char(10) & If(IsBlank(Global.Changes.Certifications), Global.OriginalJD.Certifications, Global.Changes.Certifications) & Char(10) & Char(10) &
+        "Knowledge, Skills and Abilities:" & Char(10) & If(IsBlank(Global.Changes.KSA), Global.OriginalJD.KSA, Global.Changes.KSA)
+
+    - kind: SetVariable
+      id: setVariable_utChanged
+      variable: Topic.ChangedSections
+      value: |-
+        =With(
+          {
+            c: Concat(
+              Filter(
+                Table(
+                  {D: "Purpose", N: Global.Changes.Purpose},
+                  {D: "Principal Duties and Responsibilities", N: Global.Changes.PrincipalDuties},
+                  {D: "Education Requirements", N: Global.Changes.Education},
+                  {D: "Work Experience Requirements", N: Global.Changes.WorkExperience},
+                  {D: "Certifications and Licenses", N: Global.Changes.Certifications},
+                  {D: "Knowledge, Skills and Abilities", N: Global.Changes.KSA}
+                ),
+                !IsBlank(N)
+              ),
+              D, "; "
+            )
+          },
+          If(IsBlank(c), "None", c)
+        )
+
+    - kind: SetVariable
+      id: setVariable_utSignals
+      variable: Topic.IndirectSignals
+      value: |-
+        =With(
+          {
+            Items: Filter(
+              Table(
+                {F: "People Management", E: Global.PendingChecks.PeopleManagement},
+                {F: "Sales/Non-Sales", E: Global.PendingChecks.SalesNonSales},
+                {F: "Relationship Manager", E: Global.PendingChecks.RelationshipManager},
+                {F: "NMLS Required", E: Global.PendingChecks.NMLS}
+              ),
+              !IsBlank(E)
+            )
+          },
+          If(CountRows(Items) = 0, "None", Concat(Items, F & ": " & E, Char(10)))
+        )
+
+    - kind: SetVariable
+      id: setVariable_utTitleJSON
+      variable: Topic.TitleJSONText
+      value: |-
+        =JSON(
+          {
+            current_title: Global.OriginalJD.Title,
+            proposed_title: Global.ProposedTitle,
+            justification: Global.TitleJustification,
+            update_reasons: Global.UpdateReasons & If(IsBlank(Global.OtherReason), "", " (Other: " & Global.OtherReason & ")"),
+            business_reason: Global.BusinessReason
+          }
+        )
+
+    - kind: SetVariable
+      id: setVariable_utJobJSON
+      variable: Topic.JobJSONText
+      value: |-
+        =JSON(
+          {
+            updated_jd: Topic.UpdatedJD,
+            original_jd: Global.OriginalJDText,
+            changed_sections: Topic.ChangedSections,
+            people_management: Global.OriginalJD.PeopleManagement,
+            indirect_signals: Topic.IndirectSignals,
+            related_levels: If(IsBlank(Global.RelatedLevels), "None", Global.RelatedLevels)
+          }
+        )
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_utReview
+      input:
+        binding:
+          TitleJSON: =Topic.TitleJSONText
+          JobJSON: =Topic.JobJSONText
+
+      output:
+        binding:
+          predictionOutput: Topic.TitleResult
+
+      aIModelId: PASTE_TITLE_REVIEW_PROMPT_ID
+
+    - kind: SetVariable
+      id: setVariable_utStore
+      variable: Global.TitleReview
+      value: =Topic.TitleResult.text
+
+    - kind: SetVariable
+      id: setVariable_utSnapshot
+      variable: Global.TitleReviewSnapshot
+      value: =JSON(Global.Changes) & "|" & Global.ProposedTitle & "|" & Global.TitleJustification
+
+    - kind: SetVariable
+      id: setVariable_utParse
+      variable: Topic.T
+      value: =ParseJSON(Topic.TitleResult.text)
+
+    - kind: SetVariable
+      id: setVariable_utResult
+      variable: Topic.Result
+      value: =Lower(Trim(Text(Topic.T.result)))
+
+    - kind: SetVariable
+      id: setVariable_utQuestion
+      variable: Topic.TitleQuestion
+      value: =IfError(Text(First(Table(Topic.T.questions_for_manager)).Value.text), "")
+
+    - kind: SetVariable
+      id: setVariable_utMessage
+      variable: Topic.TitleMessage
+      value: |-
+        ="**Title review: " & Global.ProposedTitle & "**" & Char(10) & Char(10) & Text(Topic.T.manager_message)
+
+    - kind: SendActivity
+      id: sendActivity_utShow
+      activity:
+        text:
+          - "{Topic.TitleMessage}"
+
+    - kind: SetVariable
+      id: setVariable_utStatus
+      variable: Topic.TitleStatus
+      value: =If(Topic.Result = "consistent", "consistent", Topic.Result = "no_title", "NeedTitle", "concerns")
+
+    - kind: SetVariable
+      id: setVariable_utReviewOut
+      variable: Topic.TitleReviewJSON
+      value: =Topic.TitleResult.text
+
+inputType:
+  properties:
+    ProposedTitle:
+      displayName: ProposedTitle
+      description: "The new job title the manager proposes, exactly as they wrote it. Fill it only when they state a specific title in this conversation. Leave empty otherwise; never suggest one."
+      type: String
+
+    TitleJustification:
+      displayName: TitleJustification
+      description: "The manager's reason the current title no longer fits, in their own words: what changed in the work. Fill it only when they gave one. Leave empty otherwise."
+      type: String
+
+outputType:
+  properties:
+    TitleStatus:
+      displayName: TitleStatus
+      description: "NeedTitle: ask in one short question what title they would propose (if TitleAdded is Yes, first say in a few words that a title review is now part of this update). NeedJustification: ask in one short question why the current title no longer fits, meaning what changed in the work. After they answer either question, call this topic again with what they said. consistent: the review is on screen; never repeat it; add at most one short line and continue where the update left off. concerns: the review is on screen; never repeat or argue with it; ask TitleQuestion if it is not empty, otherwise ask whether they want to keep the title for HR review, propose a different title (call this topic again with ProposedTitle), or describe what changed in the work (update the sections with Draft Section Change, then call this topic again with no inputs). If they keep the title, continue the update. NotInUpdate: no update is in progress; offer to start one. Never suggest a title."
+      type: String
+
+    TitleQuestion:
+      displayName: TitleQuestion
+      description: "The title review's first question for the manager, or empty."
+      type: String
+
+    TitleAdded:
+      displayName: TitleAdded
+      description: "Yes if this call added the title review to the update."
+      type: String
+
+    TitleReviewJSON:
+      displayName: TitleReviewJSON
+      description: "JSON from the title review, for reference only. Its hr_flags are for HR; never show or read them to the manager."
+      type: String
