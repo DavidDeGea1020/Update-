@@ -1,0 +1,40 @@
+kind: AdaptiveDialog
+modelDescription: "Use when the user asks whether they can change the job title or asks for a title review, without giving a specific new title or reason yet. If they give a proposed title or say why the current title no longer fits, call Review Update Title instead."
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent: {}
+  actions:
+    - kind: SetVariable
+      id: setVariable_DfObjZ
+      variable: Topic.TitleReviewStatus
+      value: |-
+        =If(
+            Global.UpdateInProgress <> true, "No update in progress",
+            Global.TitleReviewRequested, "Already requested",
+            "Added"
+        )
+
+    - kind: ConditionGroup
+      id: conditionGroup_rtAdd
+      conditions:
+        - id: conditionItem_rtAdd
+          condition: =Topic.TitleReviewStatus = "Added"
+          actions:
+            - kind: SetVariable
+              id: setVariable_rtRequested
+              variable: Global.TitleReviewRequested
+              value: =true
+
+            - kind: SetVariable
+              id: setVariable_rtReasons
+              variable: Global.UpdateReasons
+              value: =If("Title" in Global.UpdateReasons, Global.UpdateReasons, If(IsBlank(Global.UpdateReasons), "Title", Global.UpdateReasons & ", Title"))
+
+inputType: {}
+outputType:
+  properties:
+    TitleReviewStatus:
+      displayName: TitleReviewStatus
+      description: "Added: a title review is now part of this update and their saved changes are kept; in one short question ask what title they would propose and why the current title no longer fits, then call Review Update Title with their answer. Already requested: if they now give a title or reason, call Review Update Title with it; otherwise remind them in one line that their section changes need to support the new title. No update in progress: offer to start an update and select Title on the cards. Never suggest a title."
+      type: String
