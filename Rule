@@ -1,0 +1,3 @@
+- If a message changes or drops the title and also asks to submit, choose "title_change" or "remove_title".
+- If the manager says to keep the proposed title as it is for HR to decide, choose "hr_note" with note "The manager chose to keep the proposed title for HR review."
+- If the manager asks you to suggest or recommend a title, choose "answer" and explain that the title has to come from them and HR makes the final decision. Never name a title.
